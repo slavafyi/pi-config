@@ -20,6 +20,9 @@ importers:
       '@tsconfig/node24':
         specifier: ^24.0.4
         version: 24.0.4
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.5.0
       eslint:
         specifier: ^10.1.0
         version: 10.1.0(jiti@2.6.1)
