@@ -1,0 +1,10 @@
+{
+  "lastChangelogVersion": "0.63.2",
+  "defaultThinkingLevel": "high",
+  "defaultProvider": "openai",
+  "defaultModel": "gpt-5.4",
+  "editorPaddingX": 1,
+  "packages": ["git:github.com/slavafyi/pi-wakatime"],
+  "theme": "system"
+}
+
