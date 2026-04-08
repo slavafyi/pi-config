@@ -6,7 +6,8 @@
   },
   "type": "module",
   "scripts": {
-    "check": "pnpm run lint && pnpm run typecheck",
+    "check": "pnpm run fmt && pnpm run lint && pnpm run typecheck",
+    "fmt": "prettier --write .",
     "lint": "eslint --fix",
     "typecheck": "tsc --noEmit"
   },

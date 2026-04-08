@@ -8,6 +8,7 @@ More specific `AGENTS.md` files in repositories or subdirectories add to or over
 ## Configuration changes
 
 When working on coding-agent configuration:
+
 - The coding-agent config lives in `~/.config/pi/agent` (`PI_CODING_AGENT_DIR`)
 - `PI_CONFIG_DIR` is for global Pi configuration
 
@@ -23,8 +24,10 @@ When working on coding-agent configuration:
 ## Validation after code changes
 
 After changing code files:
+
 - Discover and run the relevant existing validation commands for the changed package, workspace, or subproject
 - Prefer an aggregate project command when one exists, such as `check`, `ci`, `validate`, or an equivalent repo-specific script
 - Otherwise run the relevant existing checks for the changed files, such as lint, typecheck, test, build, format, or syntax checks
+- In `configs/pi/.config/pi/agent`, run `pnpm run check` after every code change; if you run commands individually, run `pnpm run fmt`, `pnpm run lint`, and `pnpm run typecheck`
 - Fix every issue you reasonably can before finishing
 - If anything remains, report the blocker clearly
