@@ -1,7 +1,4 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
-
-import { type ExtensionAPI, getAgentDir } from '@mariozechner/pi-coding-agent'
+import { type ExtensionAPI } from '@mariozechner/pi-coding-agent'
 
 type AuthEntry = Record<string, unknown> & {
   type?: 'api_key' | 'oauth'
@@ -11,8 +8,27 @@ type AuthEntry = Record<string, unknown> & {
   expires?: number
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
+const relatedAuthProviders: Partial<Record<string, readonly string[]>> = {
+  'openai': ['openai-codex'],
+  'openai-codex': ['openai'],
+}
+
+const getAuthType = (entry: AuthEntry | undefined) =>
+  typeof entry?.type === 'string' ? entry.type : 'none'
+
+const getOAuthExpiry = (entry: AuthEntry | undefined) =>
+  entry?.type === 'oauth' && typeof entry.expires === 'number'
+    ? new Date(entry.expires).toLocaleString()
+    : null
+
+const formatStoredAuth = (provider: string, entry: AuthEntry | undefined) => {
+  const authType = getAuthType(entry)
+  const oauthExpiry = getOAuthExpiry(entry)
+
+  return oauthExpiry
+    ? `- ${provider}: ${authType} (expires ${oauthExpiry})`
+    : `- ${provider}: ${authType}`
+}
 
 /**
  * Show auth status for the current provider.
@@ -38,38 +54,25 @@ export default function authStatusExtension(pi: ExtensionAPI) {
 
       const resolvedAuth = await ctx.modelRegistry.getApiKeyAndHeaders(selectedModel)
       const resolved = resolvedAuth.ok && Boolean(resolvedAuth.apiKey)
-
-      const authPath = join(getAgentDir(), 'auth.json')
-
-      let authEntry: AuthEntry | undefined
-      try {
-        const raw = await readFile(authPath, 'utf8')
-        const parsed: unknown = JSON.parse(raw)
-
-        if (isRecord(parsed)) {
-          const candidate = parsed[provider]
-          if (isRecord(candidate)) {
-            authEntry = candidate
-          }
-        }
-      }
-      catch {
-        // ignore missing/unreadable auth.json
-      }
-
-      const authType = typeof authEntry?.type === 'string' ? authEntry.type : 'none'
-
-      const oauthExpiry
-        = authType === 'oauth' && typeof authEntry?.expires === 'number'
-          ? new Date(authEntry.expires).toLocaleString()
-          : null
+      const authStorage = ctx.modelRegistry.authStorage
+      const authEntry = authStorage.get(provider) as AuthEntry | undefined
+      const authType = getAuthType(authEntry)
+      const oauthExpiry = getOAuthExpiry(authEntry)
+      const hasConfiguredAuth = authStorage.hasAuth(provider)
+      const relatedEntries = (relatedAuthProviders[provider] ?? [])
+        .map(relatedProvider => ({
+          provider: relatedProvider,
+          entry: authStorage.get(relatedProvider) as AuthEntry | undefined,
+        }))
+        .filter(({ entry }) => Boolean(entry))
 
       const lines = [
         `provider: ${provider}`,
         `model: ${model}`,
         `resolved credentials: ${resolved ? 'yes' : 'no'}`,
-        `auth.json entry: ${authEntry ? 'yes' : 'no'}`,
-        `auth.json type: ${authType}`,
+        `configured auth for current provider: ${hasConfiguredAuth ? 'yes' : 'no'}`,
+        `stored auth entry: ${authEntry ? 'yes' : 'no'}`,
+        `stored auth type: ${authType}`,
       ]
 
       if (!resolvedAuth.ok) {
@@ -78,6 +81,25 @@ export default function authStatusExtension(pi: ExtensionAPI) {
 
       if (oauthExpiry) {
         lines.push(`oauth expires: ${oauthExpiry}`)
+      }
+
+      if (relatedEntries.length > 0) {
+        lines.push('related stored auth:')
+        lines.push(...relatedEntries.map(({ provider, entry }) => formatStoredAuth(provider, entry)))
+      }
+
+      const codexOAuth = relatedEntries.find(({ provider }) => provider === 'openai-codex')?.entry
+      if (provider === 'openai' && !authEntry && codexOAuth?.type === 'oauth') {
+        lines.push(
+          'hint: /login stores ChatGPT subscription auth under openai-codex. The openai provider is separate and expects OPENAI_API_KEY or an auth.json openai api_key entry.',
+        )
+      }
+
+      const openAIKey = relatedEntries.find(({ provider }) => provider === 'openai')?.entry
+      if (provider === 'openai-codex' && !authEntry && openAIKey) {
+        lines.push(
+          'hint: OPENAI_API_KEY/auth.json openai only applies to the openai API provider. Run /login to authenticate openai-codex.',
+        )
       }
 
       if (resolved && !authEntry) {
