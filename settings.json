@@ -1,9 +1,13 @@
 {
-  "lastChangelogVersion": "0.68.1",
+  "lastChangelogVersion": "0.70.0",
   "defaultThinkingLevel": "xhigh",
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.4",
+  "defaultModel": "gpt-5.5",
   "editorPaddingX": 1,
-  "packages": ["git:github.com/slavafyi/pi-wakatime"],
+  "packages": [
+    "git:github.com/slavafyi/pi-wakatime",
+    "git:github.com/davebcn87/pi-autoresearch"
+  ],
   "theme": "system"
 }
+
