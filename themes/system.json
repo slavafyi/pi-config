@@ -29,8 +29,8 @@
     "thinkingText": "muted",
 
     "selectedBg": "border",
-    "userMessageBg": "",
-    "userMessageText": "",
+    "userMessageBg": "background",
+    "userMessageText": "foreground",
     "customMessageBg": "",
     "customMessageText": "",
     "customMessageLabel": "secondary",
