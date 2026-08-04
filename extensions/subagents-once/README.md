@@ -34,10 +34,17 @@ Arm delegation before the parent prompt that may need it:
 /subagents-once
 ```
 
-The footer shows:
+Arming does not add a footer status. If the next parent run starts a child, the
+footer shows only that role while it is running:
 
 ```text
-◎ oracle ◇ reviewer
+◎ oracle
+```
+
+or:
+
+```text
+◇ reviewer
 ```
 
 The next parent run can call one role or neither:
@@ -219,8 +226,11 @@ PI_SUBAGENTS_ONCE_SELF_TEST=1 \
 For a smoke test:
 
 1. start Pi and confirm no `subagent`, `oracle`, or `reviewer` tool is active;
-2. run `/subagents-once` and confirm the footer status appears;
+2. run `/subagents-once` and confirm no child status appears yet;
 3. run a local task and confirm no child launches when the gates fail;
-4. arm again and request `oracle`; confirm a foreground forked child returns;
-5. arm again and request `reviewer`; confirm a fresh child returns; and
-6. confirm the tools disappear after settlement and `/reload`.
+4. arm again and request `oracle`; confirm only `◎ oracle` appears while the
+   foreground forked child runs;
+5. arm again and request `reviewer`; confirm only `◇ reviewer` appears while the
+   fresh child runs; and
+6. confirm each status clears after its child finishes and the tools disappear
+   after settlement and `/reload`.

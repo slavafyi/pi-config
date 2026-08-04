@@ -241,6 +241,7 @@ async function delegate(
     pi.events.emit(CANCEL_EVENT, identity);
   };
   signal?.addEventListener("abort", cancel, { once: true });
+  ctx.ui.setStatus(STATUS_KEY, role === "oracle" ? "◎ oracle" : "◇ reviewer");
 
   try {
     if (signal?.aborted) cancel();
@@ -270,6 +271,7 @@ async function delegate(
       usage: toUsage(response.usage),
     };
   } finally {
+    ctx.ui.setStatus(STATUS_KEY, undefined);
     unsubscribeUpdate();
     unsubscribeResponse();
     signal?.removeEventListener("abort", cancel);
@@ -379,7 +381,6 @@ export default function subagentsOnce(pi: ExtensionAPI) {
       state.armed = true;
       state.callUsed = false;
       pi.setActiveTools([...new Set([...pi.getActiveTools(), "oracle", "reviewer"])]);
-      ctx.ui.setStatus(STATUS_KEY, "◎ oracle ◇ reviewer");
       ctx.ui.notify("Oracle and reviewer are available until the next parent run settles.", "info");
     },
   });
