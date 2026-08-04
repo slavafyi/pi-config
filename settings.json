@@ -3,6 +3,42 @@
   "defaultThinkingLevel": "high",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
+  "subagents": {
+    "defaultExtensions": [],
+    "agentOverrides": {
+      "oracle": {
+        "model": "openai-codex/gpt-5.6-sol",
+        "thinking": "high",
+        "defaultContext": "fork"
+      },
+      "reviewer": {
+        "model": "openai-codex/gpt-5.6-terra",
+        "thinking": "medium",
+        "defaultContext": "fresh"
+      },
+      "advisor": {
+        "disabled": true
+      },
+      "context-builder": {
+        "disabled": true
+      },
+      "delegate": {
+        "disabled": true
+      },
+      "planner": {
+        "disabled": true
+      },
+      "researcher": {
+        "disabled": true
+      },
+      "scout": {
+        "disabled": true
+      },
+      "worker": {
+        "disabled": true
+      }
+    }
+  },
   "editorPaddingX": 1,
   "packages": [
     "git:github.com/ttttmr/pi-wakatime",
@@ -14,7 +50,13 @@
     "git:github.com/edxeth/pi-auto-session-titles",
     "git:github.com/yusukeshib/pi-datetime",
     "git:github.com/peterp/pi-sidequest",
-    "git:github.com/nicobailon/pi-mcp-adapter"
+    "git:github.com/nicobailon/pi-mcp-adapter",
+    "git:github.com/latentminds-ai/pi-quotas",
+    {
+      "source": "git:github.com/nicobailon/pi-subagents",
+      "skills": [],
+      "prompts": []
+    }
   ],
   "theme": "system",
   "collapseChangelog": true,

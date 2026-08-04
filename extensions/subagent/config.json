@@ -1,0 +1,14 @@
+{
+  "toolDescriptionMode": "compact",
+  "asyncByDefault": false,
+  "fleetView": false,
+  "scheduledRuns": {
+    "enabled": false
+  },
+  "missions": {
+    "enabled": false
+  },
+  "maxSubagentSpawnsPerSession": 6,
+  "maxSubagentDepth": 1,
+  "artifactDir": "session"
+}
