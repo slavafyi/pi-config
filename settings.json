@@ -56,7 +56,8 @@
       "source": "git:github.com/nicobailon/pi-subagents",
       "skills": [],
       "prompts": []
-    }
+    },
+    "npm:@ogulcancelik/pi-session-recall"
   ],
   "theme": "system",
   "collapseChangelog": true,
