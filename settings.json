@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.83.0",
+  "lastChangelogVersion": "0.84.0",
   "defaultThinkingLevel": "high",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
@@ -59,7 +59,7 @@
     },
     "npm:@ogulcancelik/pi-session-recall"
   ],
-  "theme": "system",
+  "theme": "koda-light/koda-dark",
   "collapseChangelog": true,
   "quietStartup": true,
   "autoSessionTitles": {
