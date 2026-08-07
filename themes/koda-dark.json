@@ -13,14 +13,13 @@
     "border": "#ffffff",
     "emphasis": "#ffffff",
     "func": "#ffffff",
-    "string": "#ffffff",
-    "const": "#d9ba73",
+    "string": "#949494",
+    "const": "#86cd82",
     "highlight": "#458ee6",
     "info": "#8ebeec",
     "success": "#86cd82",
     "warning": "#d9ba73",
-    "danger": "#ff7676",
-    "pink": "#f2a4db"
+    "danger": "#ff7676"
   },
   "colors": {
     "accent": "const",
@@ -40,7 +39,7 @@
     "userMessageText": "fg",
     "customMessageBg": "bg",
     "customMessageText": "fg",
-    "customMessageLabel": "pink",
+    "customMessageLabel": "success",
     "toolPendingBg": "bg",
     "toolSuccessBg": "bg",
     "toolErrorBg": "bg",
@@ -76,7 +75,7 @@
     "thinkingMinimal": "comment",
     "thinkingLow": "keyword",
     "thinkingMedium": "info",
-    "thinkingHigh": "pink",
+    "thinkingHigh": "success",
     "thinkingXhigh": "danger",
 
     "bashMode": "success"
