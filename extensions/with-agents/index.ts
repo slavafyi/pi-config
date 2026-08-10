@@ -14,7 +14,7 @@ const ORCHESTRATION_TOOLS = ["Agent", "get_subagent_result", "steer_subagent"];
 const ORCHESTRATION_TOOL_SET = new Set(ORCHESTRATION_TOOLS);
 
 export const VALIDATOR_PROMPT = `
---- SUBAGENTS ONCE ---
+--- WITH AGENTS ---
 Delegation is optional. Evaluate all three gates silently before every Agent call. If any gate fails, continue locally without announcing the gate decision.
 {{CONTEXT_USAGE}}
 Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish the remaining work within its current context budget without filling the main context with a large or noisy investigation, or when isolated independent execution or review is itself required. Do not use a fixed percentage threshold.
@@ -35,7 +35,7 @@ Choose model, thinking, run_in_background, inherit_context, and isolation per ca
 Agent resume works only for an agent ID still held by the current pi-subagents manager. Use get_subagent_result and steer_subagent only for such known agents. Persisted session files are not automatically rediscovered after manager cleanup or a Pi restart.
 
 The parent owns integration and must verify agent-produced changes before reporting completion.
---- END SUBAGENTS ONCE ---`;
+--- END WITH AGENTS ---`;
 
 export default function subagentsOnce(pi: ExtensionAPI) {
   const state = createState();
@@ -52,11 +52,11 @@ export default function subagentsOnce(pi: ExtensionAPI) {
     hideTools();
   });
 
-  pi.registerCommand("subagents-once", {
+  pi.registerCommand("with-agents", {
     description: "Enable subagent orchestration for the next user prompt",
     handler: async (args, ctx) => {
       if (args.trim()) {
-        ctx.ui.notify("Usage: /subagents-once", "warning");
+        ctx.ui.notify("Usage: /with-agents", "warning");
         return;
       }
 
@@ -64,15 +64,15 @@ export default function subagentsOnce(pi: ExtensionAPI) {
         (name) => !pi.getAllTools().some((tool) => tool.name === name),
       );
       if (missing.length) {
-        ctx.ui.notify(`Cannot arm subagents: missing ${missing.join(", ")}.`, "error");
+        ctx.ui.notify(`Cannot enable agents: missing ${missing.join(", ")}.`, "error");
         return;
       }
       if (!arm(state)) {
-        ctx.ui.notify("Subagents are already armed or active.", "info");
+        ctx.ui.notify("Agents are already enabled or active.", "info");
         return;
       }
 
-      ctx.ui.notify("Subagents armed for the next prompt.", "info");
+      ctx.ui.notify("Agents enabled for the next prompt.", "info");
     },
   });
 
@@ -92,7 +92,7 @@ export default function subagentsOnce(pi: ExtensionAPI) {
 
   pi.on("tool_call", (event) => {
     if (ORCHESTRATION_TOOL_SET.has(event.toolName) && state.phase !== "active") {
-      return { block: true, reason: "Run /subagents-once before using subagent tools." };
+      return { block: true, reason: "Run /with-agents before using subagent tools." };
     }
   });
 

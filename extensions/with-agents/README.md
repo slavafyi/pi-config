@@ -1,6 +1,6 @@
-# Subagents Once
+# With Agents
 
-`subagents-once` is a small policy gate around
+`with-agents` is a small policy gate around
 `@tintinweb/pi-subagents`. Tintinweb owns agent execution, persistence,
 concurrency, resume, steering, transcripts, and UI. This extension only controls
 when its three model-facing orchestration tools are active.
@@ -16,7 +16,7 @@ At session start, these tools are registered but hidden from the parent model:
 Run the command before the prompt that may use subagents:
 
 ```text
-/subagents-once
+/with-agents
 ```
 
 The command shows a short toast and arms only the next user prompt. It does not
@@ -29,7 +29,7 @@ After the parent run reaches `agent_settled`, the orchestration tools are hidden
 again. Background agents are not stopped: Tintinweb continues running them and
 shows its standard `● Agents`, activity, and running-agent count UI.
 
-A later `/subagents-once` can use `get_subagent_result`, `steer_subagent`, or
+A later `/with-agents` can use `get_subagent_result`, `steer_subagent`, or
 `Agent({ resume: "..." })` with agent IDs that Tintinweb still holds in its
 manager.
 
@@ -148,26 +148,26 @@ Run the state-machine test:
 
 ```bash
 node --experimental-strip-types \
-  configs/pi/.config/pi/agent/extensions/subagents-once/contract-test.ts
+  configs/pi/.config/pi/agent/extensions/with-agents/contract-test.ts
 ```
 
 Check formatting and extension loading:
 
 ```bash
 pnpm dlx oxfmt@latest --check \
-  configs/pi/.config/pi/agent/extensions/subagents-once/index.ts \
-  configs/pi/.config/pi/agent/extensions/subagents-once/policy.ts \
-  configs/pi/.config/pi/agent/extensions/subagents-once/contract-test.ts
+  configs/pi/.config/pi/agent/extensions/with-agents/index.ts \
+  configs/pi/.config/pi/agent/extensions/with-agents/policy.ts \
+  configs/pi/.config/pi/agent/extensions/with-agents/contract-test.ts
 
 pi --no-extensions --no-session \
-  -e configs/pi/.config/pi/agent/extensions/subagents-once/index.ts \
+  -e configs/pi/.config/pi/agent/extensions/with-agents/index.ts \
   --list-models >/dev/null
 ```
 
 Manual smoke test:
 
 1. Start a new Pi session and confirm all three orchestration tools are hidden.
-2. Run `/subagents-once`; confirm only the toast appears.
+2. Run `/with-agents`; confirm only the toast appears.
 3. Submit a prompt and confirm `Agent`, `get_subagent_result`, and
    `steer_subagent` are available during that run.
 4. Start several independent background agents and confirm no more than four
