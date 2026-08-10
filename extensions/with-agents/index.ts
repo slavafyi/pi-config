@@ -90,12 +90,6 @@ export default function subagentsOnce(pi: ExtensionAPI) {
     return { systemPrompt: `${event.systemPrompt}\n\n${validatorPrompt}` };
   });
 
-  pi.on("tool_call", (event) => {
-    if (ORCHESTRATION_TOOL_SET.has(event.toolName) && state.phase !== "active") {
-      return { block: true, reason: "Run /with-agents before using subagent tools." };
-    }
-  });
-
   pi.on("agent_settled", () => {
     if (settleParentRun(state)) hideTools();
   });

@@ -33,6 +33,10 @@ A later `/with-agents` can use `get_subagent_result`, `steer_subagent`, or
 `Agent({ resume: "..." })` with agent IDs that Tintinweb still holds in its
 manager.
 
+`/tools` remains an explicit manual override. Enabling orchestration tools there
+makes them available without arming or validator instructions until the user
+turns them off or a new session restores the default hidden state.
+
 ## Policy
 
 The parent silently evaluates three gates before every `Agent` call. If any
