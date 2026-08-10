@@ -31,7 +31,6 @@ export type OnceState = { armed: boolean; callUsed: boolean };
 type Thinking = (typeof THINKING_LEVELS)[number];
 
 type DelegationIdentity = {
-  version: 2;
   requestId: string;
   ownerRunId: string;
   nodeId: string;
@@ -143,7 +142,6 @@ function matchesIdentity(
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<DelegationIdentity>;
   return (
-    candidate.version === identity.version &&
     candidate.requestId === identity.requestId &&
     candidate.ownerRunId === identity.ownerRunId &&
     candidate.nodeId === identity.nodeId
@@ -196,12 +194,11 @@ async function delegate(
     ctx.modelRegistry.find(provider, modelId),
   );
   const identity: DelegationIdentity = {
-    version: 2,
     requestId: randomUUID(),
     ownerRunId: ctx.sessionManager.getSessionId(),
     nodeId: toolCallId,
   };
-  const request: DelegationRequest = {
+  const request = {
     ...identity,
     agent: role,
     task: params.task,
@@ -210,7 +207,7 @@ async function delegate(
     ...(model ? { model } : {}),
     ...(params.thinking ? { thinking: params.thinking } : {}),
     result: { kind: "text" },
-  };
+  } satisfies DelegationRequest;
 
   let resolveResponse!: (response: DelegationResponse) => void;
   const responsePromise = new Promise<DelegationResponse>((resolve) => {
@@ -292,6 +289,13 @@ export function demo(): void {
     }
     if (!rejected) throw new Error(`model validation accepted ${model}`);
   }
+  const identity: DelegationIdentity = {
+    requestId: "request",
+    ownerRunId: "owner",
+    nodeId: "node",
+  };
+  if (!matchesIdentity({ ...identity, status: "completed" }, identity))
+    throw new Error("delegation identity matching failed");
   const state: OnceState = { armed: true, callUsed: false };
   if (consumeCall(state) !== undefined || !consumeCall(state))
     throw new Error("one-call policy failed");

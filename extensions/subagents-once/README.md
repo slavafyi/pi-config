@@ -5,9 +5,9 @@ short-lived. Subagent tools are unavailable to the parent model by default.
 Running `/subagents-once` exposes `oracle` and `reviewer` for one parent run,
 with at most one child call total.
 
-The extension delegates through the public `pi-subagents` version 2 event
-contract. `pi-subagents` remains responsible for child discovery, model and
-thinking defaults, session creation, progress, cancellation, and usage
+The extension delegates through the public `pi-subagents` structured owned-leaf
+event contract. `pi-subagents` remains responsible for child discovery, model
+and thinking defaults, session creation, progress, cancellation, and usage
 accounting.
 
 ## Requirements
@@ -21,8 +21,9 @@ The repository configuration currently:
 - installs `git:github.com/nicobailon/pi-subagents`;
 - filters out the package's skills and prompt templates;
 - configures `oracle` with forked context;
-- configures `reviewer` with fresh context;
-- keeps unused builtin child roles disabled; and
+- configures `reviewer` with fresh context and no direct `edit` or `write` tools;
+- keeps unused builtin child roles disabled;
+- leaves the backend session spawn count unlimited; and
 - configures foreground execution and session-scoped artifacts in
   `../subagent/config.json`.
 
@@ -178,7 +179,7 @@ The extension enforces the objective boundaries in code:
 - execution is foreground-only and always starts a new child;
 - progress and bounded metadata are returned to the parent;
 - nested model usage contributes to Pi's session totals; and
-- cancellation uses the full version 2 request identity.
+- cancellation uses the full request, owner-run, and node identity.
 
 Semantic value remains the parent's judgment. The extension does not attempt to
 infer whether the three gates passed from keywords in the task.
@@ -221,6 +222,14 @@ PI_SUBAGENTS_ONCE_SELF_TEST=1 \
   pi --no-session --no-extensions \
   -e configs/pi/.config/pi/agent/extensions/subagents-once/index.ts \
   --list-models >/dev/null
+```
+
+Check the request shape and resolved reviewer tool allowlist against the
+currently installed `pi-subagents`:
+
+```bash
+node --experimental-strip-types \
+  configs/pi/.config/pi/agent/extensions/subagents-once/contract-test.ts
 ```
 
 For a smoke test:

@@ -14,18 +14,13 @@
       "reviewer": {
         "model": "openai-codex/gpt-5.6-terra",
         "thinking": "medium",
-        "defaultContext": "fresh"
+        "defaultContext": "fresh",
+        "tools": ["read", "grep", "find", "ls", "bash", "intercom"]
       },
       "advisor": {
         "disabled": true
       },
-      "context-builder": {
-        "disabled": true
-      },
       "delegate": {
-        "disabled": true
-      },
-      "planner": {
         "disabled": true
       },
       "researcher": {
