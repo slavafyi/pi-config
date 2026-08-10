@@ -3,6 +3,12 @@ export type OnceState = {
   pendingUserPrompt: boolean;
 };
 
+export type ContextUsage = {
+  tokens: number | null;
+  contextWindow: number;
+  percent: number | null;
+};
+
 export function createState(): OnceState {
   return { phase: "disabled", pendingUserPrompt: false };
 }
@@ -35,4 +41,16 @@ export function settleParentRun(state: OnceState): boolean {
 export function reset(state: OnceState): void {
   state.phase = "disabled";
   state.pendingUserPrompt = false;
+}
+
+export function formatContextUsage(usage: ContextUsage | undefined): string | undefined {
+  if (!usage) return undefined;
+  if (usage.tokens === null) {
+    return `Parent context: usage temporarily unknown after compaction; context window ${usage.contextWindow.toLocaleString("en-US")} tokens.`;
+  }
+
+  const remaining = Math.max(0, usage.contextWindow - usage.tokens);
+  const usedPercent = usage.percent ?? (usage.tokens / usage.contextWindow) * 100;
+  const remainingPercent = Math.max(0, 100 - usedPercent);
+  return `Parent context: ${usage.tokens.toLocaleString("en-US")}/${usage.contextWindow.toLocaleString("en-US")} tokens used (${usedPercent.toFixed(1)}%); ${remaining.toLocaleString("en-US")} tokens remain (${remainingPercent.toFixed(1)}%).`;
 }

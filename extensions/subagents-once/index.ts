@@ -3,6 +3,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   arm,
   createState,
+  formatContextUsage,
   noteUserPrompt,
   reset,
   settleParentRun,
@@ -15,8 +16,8 @@ const ORCHESTRATION_TOOL_SET = new Set(ORCHESTRATION_TOOLS);
 export const VALIDATOR_PROMPT = `
 --- SUBAGENTS ONCE ---
 Delegation is optional. Evaluate all three gates silently before every Agent call. If any gate fails, continue locally without announcing the gate decision.
-
-Gate 1 — Necessity: do not delegate work the parent can complete reliably within one context window.
+{{CONTEXT_USAGE}}
+Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish the remaining work within its current context budget without filling the main context with a large or noisy investigation, or when isolated independent execution or review is itself required. Do not use a fixed percentage threshold.
 
 Gate 2 — Independent value: the agent must provide a distinct investigation, challenge, implementation, or review, not duplicate the parent's work or supply reassurance by vote. Parallel sibling calls must be independent and non-overlapping.
 
@@ -79,9 +80,14 @@ export default function subagentsOnce(pi: ExtensionAPI) {
     if (noteUserPrompt(state, event.source)) showTools();
   });
 
-  pi.on("before_agent_start", (event) => {
+  pi.on("before_agent_start", (event, ctx) => {
     if (!startParentRun(state)) return;
-    return { systemPrompt: `${event.systemPrompt}\n\n${VALIDATOR_PROMPT}` };
+    const usage = formatContextUsage(ctx.getContextUsage());
+    const validatorPrompt = VALIDATOR_PROMPT.replace(
+      "{{CONTEXT_USAGE}}\n",
+      usage ? `${usage}\n` : "",
+    );
+    return { systemPrompt: `${event.systemPrompt}\n\n${validatorPrompt}` };
   });
 
   pi.on("tool_call", (event) => {

@@ -38,12 +38,20 @@ manager.
 The parent silently evaluates three gates before every `Agent` call. If any
 gate fails, it continues locally without announcing the decision:
 
-1. **Necessity:** keep work local when it fits reliably in one context window.
+1. **Necessity and context economy:** keep work local when the parent can
+   reliably finish within its remaining context budget. Delegation is also
+   justified when isolated independent execution or review is itself required.
+   No fixed percentage threshold is used.
 2. **Independent value:** delegate distinct work, not duplication or a
    reassurance vote. Sibling calls must be independent and non-overlapping.
 3. **Handoff readiness:** provide a narrow task with evidence, files or
    artifacts, preserved constraints, and expected output. Use `reviewer` only
    after a concrete artifact exists.
+
+At parent-run start, the validator receives a context snapshot from
+`ctx.getContextUsage()`, including used and remaining tokens and percentages.
+Immediately after compaction, Pi may temporarily report usage as unknown; the
+validator says so rather than inventing a remainder.
 
 After the gates pass, zero, one, or several calls are allowed. The parent also
 chooses model, thinking, background mode, context inheritance, and isolation

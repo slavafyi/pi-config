@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   arm,
   createState,
+  formatContextUsage,
   noteUserPrompt,
   reset,
   settleParentRun,
@@ -28,3 +29,13 @@ assert.equal(noteUserPrompt(state, "rpc"), true);
 assert.equal(startParentRun(state), true);
 reset(state);
 assert.deepEqual(state, createState());
+
+assert.equal(formatContextUsage(undefined), undefined);
+assert.equal(
+  formatContextUsage({ tokens: 120_000, contextWindow: 200_000, percent: 60 }),
+  "Parent context: 120,000/200,000 tokens used (60.0%); 80,000 tokens remain (40.0%).",
+);
+assert.equal(
+  formatContextUsage({ tokens: null, contextWindow: 200_000, percent: null }),
+  "Parent context: usage temporarily unknown after compaction; context window 200,000 tokens.",
+);
