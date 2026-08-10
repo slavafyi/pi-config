@@ -3,37 +3,6 @@
   "defaultThinkingLevel": "high",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
-  "subagents": {
-    "defaultExtensions": [],
-    "agentOverrides": {
-      "oracle": {
-        "model": "openai-codex/gpt-5.6-sol",
-        "thinking": "high",
-        "defaultContext": "fork"
-      },
-      "reviewer": {
-        "model": "openai-codex/gpt-5.6-terra",
-        "thinking": "medium",
-        "defaultContext": "fresh",
-        "tools": ["read", "grep", "find", "ls", "bash", "intercom"]
-      },
-      "advisor": {
-        "disabled": true
-      },
-      "delegate": {
-        "disabled": true
-      },
-      "researcher": {
-        "disabled": true
-      },
-      "scout": {
-        "disabled": true
-      },
-      "worker": {
-        "disabled": true
-      }
-    }
-  },
   "editorPaddingX": 1,
   "packages": [
     "git:github.com/ttttmr/pi-wakatime",
@@ -47,11 +16,7 @@
     "git:github.com/peterp/pi-sidequest",
     "git:github.com/nicobailon/pi-mcp-adapter",
     "git:github.com/latentminds-ai/pi-quotas",
-    {
-      "source": "git:github.com/nicobailon/pi-subagents",
-      "skills": [],
-      "prompts": []
-    },
+    "git:github.com/tintinweb/pi-subagents",
     "npm:@ogulcancelik/pi-session-recall"
   ],
   "theme": "koda-light/koda-dark",

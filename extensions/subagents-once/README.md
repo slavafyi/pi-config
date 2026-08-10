@@ -1,245 +1,165 @@
 # Subagents Once
 
-`subagents-once` is a Pi policy extension that makes delegation explicit and
-short-lived. Subagent tools are unavailable to the parent model by default.
-Running `/subagents-once` exposes `oracle` and `reviewer` for one parent run,
-with at most one child call total.
+`subagents-once` is a small policy gate around
+`@tintinweb/pi-subagents`. Tintinweb owns agent execution, persistence,
+concurrency, resume, steering, transcripts, and UI. This extension only controls
+when its three model-facing orchestration tools are active.
 
-The extension delegates through the public `pi-subagents` structured owned-leaf
-event contract. `pi-subagents` remains responsible for child discovery, model
-and thinking defaults, session creation, progress, cancellation, and usage
-accounting.
+## Behavior
 
-## Requirements
+At session start, these tools are registered but hidden from the parent model:
 
-The Pi configuration must load `pi-subagents`. Its raw `subagent` tool may be
-inactive, but it must be registered as the backend health signal. The command
-refuses to arm when the backend is missing.
+- `Agent`
+- `get_subagent_result`
+- `steer_subagent`
 
-The repository configuration currently:
-
-- installs `git:github.com/nicobailon/pi-subagents`;
-- filters out the package's skills and prompt templates;
-- configures `oracle` with forked context;
-- configures `reviewer` with fresh context and no direct `edit` or `write` tools;
-- keeps unused builtin child roles disabled;
-- leaves the backend session spawn count unlimited; and
-- configures foreground execution and session-scoped artifacts in
-  `../subagent/config.json`.
-
-## Usage
-
-Arm delegation before the parent prompt that may need it:
+Run the command before the prompt that may use subagents:
 
 ```text
 /subagents-once
 ```
 
-Arming does not add a footer status. If the next parent run starts a child, the
-footer shows only that role while it is running:
+The command shows a short toast and arms only the next user prompt. It does not
+add a footer status, widget, renderer, or custom runtime. When that prompt
+starts, all three orchestration tools become active and the parent receives the
+validator policy. The parent may make zero, one, or several `Agent` calls.
+Independent sibling calls can run in parallel.
 
-```text
-◎ oracle
-```
+After the parent run reaches `agent_settled`, the orchestration tools are hidden
+again. Background agents are not stopped: Tintinweb continues running them and
+shows its standard `● Agents`, activity, and running-agent count UI.
 
-or:
+A later `/subagents-once` can use `get_subagent_result`, `steer_subagent`, or
+`Agent({ resume: "..." })` with agent IDs that Tintinweb still holds in its
+manager.
 
-```text
-◇ reviewer
-```
+## Policy
 
-The next parent run can call one role or neither:
+The validator tells the parent to:
 
-```ts
-oracle({
-  task: "Challenge the assumptions in the authentication design.",
-})
-```
+- keep work local when it fits reliably in one context window;
+- delegate only narrow, self-contained tasks with evidence and constraints;
+- allow multiple sibling calls only for independent work;
+- avoid duplicating delegated work in the parent;
+- choose model, thinking, background mode, context inheritance, and isolation
+  per call;
+- use worktree isolation only when the individual call needs it; and
+- verify agent-produced changes before reporting completion.
 
-```ts
-reviewer({
-  task: "Review the current diff for correctness and missing tests.",
-})
-```
-
-Optional overrides apply to one child call:
-
-```ts
-reviewer({
-  task: "Review the current diff independently.",
-  model: "openai-codex/gpt-5.6-terra",
-  thinking: "high",
-})
-```
-
-When `model` or `thinking` is omitted, `pi-subagents` resolves the configured
-agent default. Model overrides must be exact `provider/model-id` names present
-in Pi's model registry.
-
-Calling `/subagents-once` again while already armed does not reset the call
-counter. Non-empty command arguments are rejected.
-
-## Lifecycle
-
-```text
-disabled --/subagents-once--> armed
-armed --next parent prompt--> active run
-active run --zero or one child call--> agent_settled
-agent_settled --> disabled
-```
-
-On session start or reload, the extension:
-
-1. checks whether the `subagent` backend tool is registered;
-2. removes `subagent`, `subagent_wait`, `oracle`, and `reviewer` from the active
-   model tool set;
-3. clears its footer status; and
-4. resets its in-memory state.
-
-`/subagents-once` preserves unrelated active tools and adds only `oracle` and
-`reviewer`. After `agent_settled`, both roles are removed even when neither was
-called. Session replacement and reload also restore the disabled state.
-
-`subagent_supervisor` and `intercom` are not disabled. They may still be needed
-for child-to-parent coordination. The package's human-only `/run` command also
-remains available outside this model-facing policy.
-
-## Delegation rules
-
-While armed, the extension adds three gates to the parent system prompt. The
-parent evaluates them silently. All three must pass before delegation.
-
-### 1. Necessity
-
-Delegate only when the work cannot be handled reliably in the parent's current
-context or requires a genuinely isolated, context-heavy investigation.
-
-Local file reads, routine commands, and bounded implementation work normally
-stay with the parent.
-
-### 2. Independent value
-
-The child must provide a distinct challenge or review function. It must not
-repeat the parent's work or act as a second vote for reassurance.
-
-### 3. Handoff readiness
-
-The child must receive a narrow task containing:
-
-- the exact question;
-- relevant evidence, files, artifacts, or diff;
-- decisions and constraints to preserve;
-- the expected output; and
-- an explicit advisory and non-writing boundary.
-
-If any gate fails, the parent continues locally without announcing the gate
-ceremony.
+No code-level call counter is added. Tintinweb provides parallel execution and
+the configured concurrency limit.
 
 ## Roles
 
-| Tool | Use | Backend context |
+Only three global custom agents are enabled:
+
+| Role | Purpose | Tools |
 | --- | --- | --- |
-| `oracle` | Challenge direction, assumptions, contradictions, or decision drift before implementation. | `fork` |
-| `reviewer` | Independently inspect an existing diff, implementation, plan, or specification. | `fresh` |
+| `general` | Autonomous worker for a narrow task | All seven built-in coding tools |
+| `oracle` | Independent second opinion on direction and assumptions | `read`, `grep`, `find`, `ls` |
+| `reviewer` | Independent review of a finished artifact | `read`, `bash`, `grep`, `find`, `ls` |
 
-Every call creates a new persisted child session. The extension does not expose
-resume, background execution, workflows, parallel children, or additional
-roles.
+All profiles set `persist_session: true` and `extensions: false`, so their tool
+lists are exact built-in allowlists. They do not pin model, thinking,
+background mode, context inheritance, or filesystem isolation. `reviewer` may
+use `bash` for tests but is instructed not to modify files.
 
-The parent remains the only writer, integrator, and final decision-maker.
-Oracle and reviewer prompts are advisory controls, not a security sandbox. A
-child with `bash` can still mutate the workspace; strict command enforcement
-requires a separate guard.
+Profiles live in the Tintinweb global agent directory:
 
-## Tool reference
+```text
+$PI_CODING_AGENT_DIR/agents/
+```
 
-Both tools accept the same parameters:
+In this repository that directory is installed from:
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `task` | string | yes | Non-whitespace advisory task with evidence, constraints, and expected output. |
-| `model` | string | no | Exact `provider/model-id` override. |
-| `thinking` | enum | no | One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
+```text
+configs/pi/.config/pi/agent/agents/
+```
 
-The model cannot select the backend agent, context mode, execution mode,
-session, tools, acceptance policy, or workflow fields.
+## Backend settings
 
-## Enforced policy
+Global `subagents.json` configures the backend:
 
-The extension enforces the objective boundaries in code:
+```json
+{
+  "maxConcurrent": 4,
+  "defaultJoinMode": "smart",
+  "schedulingEnabled": false,
+  "maxSubagentDepth": 1,
+  "disableDefaultAgents": true,
+  "fallbackSubagent": "none"
+}
+```
 
-- delegation must be armed;
-- only `oracle` and `reviewer` are exposed;
-- the first accepted role call consumes the one-call allowance;
-- sibling role calls in the same tool batch are blocked sequentially;
-- failed or cancelled children still consume the allowance;
-- `task` must contain non-whitespace text;
-- optional models must resolve exactly in Pi's model registry;
-- role and context mappings are fixed;
-- execution is foreground-only and always starts a new child;
-- progress and bounded metadata are returned to the parent;
-- nested model usage contributes to Pi's session totals; and
-- cancellation uses the full request, owner-run, and node identity.
+This gives background agents a four-run queue limit and smart joins. Built-in
+agent types and permissive fallback are disabled. A nesting depth of one means
+custom agents receive no nested orchestration tools. Disabling scheduling also
+removes the `schedule` field from `Agent` on the next Pi session.
 
-Semantic value remains the parent's judgment. The extension does not attempt to
-infer whether the three gates passed from keywords in the task.
+Tintinweb documents that foreground agents bypass `maxConcurrent`; use
+background calls for bounded parallel fan-out.
+
+## Resume limitation
+
+`persist_session: true` stores each agent as a normal Pi session on disk, but
+Tintinweb's `Agent({ resume: id })` currently resolves the ID through its
+in-memory manager record. Completed records are cleaned up after ten minutes,
+and manager state is lost when Pi restarts.
+
+The session file remains on disk, but this configuration does not implement
+automatic `agent ID → session file` discovery. Resume therefore works only
+while the corresponding manager record remains in memory.
 
 ## Installation
 
-The source lives at:
+`settings.json` loads:
 
 ```text
-configs/pi/.config/pi/agent/extensions/subagents-once/
+git:github.com/tintinweb/pi-subagents
 ```
 
-GNU Stow installs it at:
+The migration was verified against installed version `0.14.3` at commit
+`2966cd5a33c0640de9698b56a39c11f83207a835`. The git package is intentionally
+unpinned, so recheck its tool and settings API after upstream updates.
 
-```text
-~/.config/pi/agent/extensions/subagents-once/
-```
-
-Apply the Pi component through the repository installer:
+Apply the Pi component through GNU Stow from the repository root:
 
 ```bash
-./install.sh setup_pi
+stow --dir configs --target "$HOME" --stow pi
 ```
 
-Do not create the symlink manually.
+Do not create symlinks manually.
 
 ## Validation
 
-Run the formatter check:
-
-```bash
-pnpm dlx oxfmt@latest --check \
-  configs/pi/.config/pi/agent/extensions/subagents-once/index.ts
-```
-
-Run the built-in policy self-check without loading other extensions:
-
-```bash
-PI_SUBAGENTS_ONCE_SELF_TEST=1 \
-  pi --no-session --no-extensions \
-  -e configs/pi/.config/pi/agent/extensions/subagents-once/index.ts \
-  --list-models >/dev/null
-```
-
-Check the request shape and resolved reviewer tool allowlist against the
-currently installed `pi-subagents`:
+Run the state-machine test:
 
 ```bash
 node --experimental-strip-types \
   configs/pi/.config/pi/agent/extensions/subagents-once/contract-test.ts
 ```
 
-For a smoke test:
+Check formatting and extension loading:
 
-1. start Pi and confirm no `subagent`, `oracle`, or `reviewer` tool is active;
-2. run `/subagents-once` and confirm no child status appears yet;
-3. run a local task and confirm no child launches when the gates fail;
-4. arm again and request `oracle`; confirm only `◎ oracle` appears while the
-   foreground forked child runs;
-5. arm again and request `reviewer`; confirm only `◇ reviewer` appears while the
-   fresh child runs; and
-6. confirm each status clears after its child finishes and the tools disappear
-   after settlement and `/reload`.
+```bash
+pnpm dlx oxfmt@latest --check \
+  configs/pi/.config/pi/agent/extensions/subagents-once/index.ts \
+  configs/pi/.config/pi/agent/extensions/subagents-once/policy.ts \
+  configs/pi/.config/pi/agent/extensions/subagents-once/contract-test.ts
+
+pi --no-extensions --no-session \
+  -e configs/pi/.config/pi/agent/extensions/subagents-once/index.ts \
+  --list-models >/dev/null
+```
+
+Manual smoke test:
+
+1. Start a new Pi session and confirm all three orchestration tools are hidden.
+2. Run `/subagents-once`; confirm only the toast appears.
+3. Submit a prompt and confirm `Agent`, `get_subagent_result`, and
+   `steer_subagent` are available during that run.
+4. Start several independent background agents and confirm no more than four
+   run concurrently and Tintinweb renders their standard UI.
+5. Let the parent settle and confirm the tools disappear while background
+   agents continue.
+6. Arm again and resume or query an agent whose ID is still in manager memory.
