@@ -4,5 +4,7 @@
   "schedulingEnabled": false,
   "maxSubagentDepth": 1,
   "disableDefaultAgents": true,
-  "fallbackSubagent": "none"
+  "fallbackSubagent": "none",
+  "fleetView": false,
+  "widgetMode": "all"
 }

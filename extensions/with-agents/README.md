@@ -27,7 +27,8 @@ Independent sibling calls can run in parallel.
 
 After the parent run reaches `agent_settled`, the orchestration tools are hidden
 again. Background agents are not stopped: Tintinweb continues running them and
-shows its standard `● Agents`, activity, and running-agent count UI.
+shows its `● Agents` widget. The widget includes foreground and background
+agents, while the below-editor FleetView is disabled globally.
 
 A later `/with-agents` can use `get_subagent_result`, `steer_subagent`, or
 `Agent({ resume: "..." })` with agent IDs that Tintinweb still holds in its
@@ -103,7 +104,9 @@ Global `subagents.json` configures the backend:
   "schedulingEnabled": false,
   "maxSubagentDepth": 1,
   "disableDefaultAgents": true,
-  "fallbackSubagent": "none"
+  "fallbackSubagent": "none",
+  "fleetView": false,
+  "widgetMode": "all"
 }
 ```
 
@@ -122,21 +125,27 @@ Tintinweb's `Agent({ resume: id })` currently resolves the ID through its
 in-memory manager record. Completed records are cleaned up after ten minutes,
 and manager state is lost when Pi restarts.
 
+Persisted agents record the parent session from which they were launched, so
+Pi groups them beneath it in `/resume`'s threaded view. This lineage is metadata
+only and does not enable context inheritance.
+
 The session file remains on disk, but this configuration does not implement
 automatic `agent ID → session file` discovery. Resume therefore works only
 while the corresponding manager record remains in memory.
 
 ## Installation
 
-`settings.json` loads:
+`settings.json` temporarily loads the commit from upstream PR
+[tintinweb/pi-subagents#205](https://github.com/tintinweb/pi-subagents/pull/205):
+
+<!-- TODO: Remove the commit pin after tintinweb/pi-subagents#205 merges. -->
 
 ```text
-git:github.com/tintinweb/pi-subagents
+git:github.com/tintinweb/pi-subagents@09281cef7adc526cefe32b1ff69a0cf3396751ad
 ```
 
-The migration was verified against installed version `0.14.3` at commit
-`2966cd5a33c0640de9698b56a39c11f83207a835`. The git package is intentionally
-unpinned, so recheck its tool and settings API after upstream updates.
+The pinned commit is version `0.14.3` plus parent-session lineage for persisted
+subagents. Recheck the package's tool and settings API when removing the pin.
 
 Apply the Pi component through GNU Stow from the repository root:
 
