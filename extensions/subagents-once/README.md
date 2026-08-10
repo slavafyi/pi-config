@@ -35,16 +35,20 @@ manager.
 
 ## Policy
 
-The validator tells the parent to:
+The parent silently evaluates three gates before every `Agent` call. If any
+gate fails, it continues locally without announcing the decision:
 
-- keep work local when it fits reliably in one context window;
-- delegate only narrow, self-contained tasks with evidence and constraints;
-- allow multiple sibling calls only for independent work;
-- avoid duplicating delegated work in the parent;
-- choose model, thinking, background mode, context inheritance, and isolation
-  per call;
-- use worktree isolation only when the individual call needs it; and
-- verify agent-produced changes before reporting completion.
+1. **Necessity:** keep work local when it fits reliably in one context window.
+2. **Independent value:** delegate distinct work, not duplication or a
+   reassurance vote. Sibling calls must be independent and non-overlapping.
+3. **Handoff readiness:** provide a narrow task with evidence, files or
+   artifacts, preserved constraints, and expected output. Use `reviewer` only
+   after a concrete artifact exists.
+
+After the gates pass, zero, one, or several calls are allowed. The parent also
+chooses model, thinking, background mode, context inheritance, and isolation
+per call, uses worktree isolation only when needed, and verifies agent-produced
+changes before reporting completion.
 
 No code-level call counter is added. Tintinweb provides parallel execution and
 the configured concurrency limit.

@@ -14,14 +14,20 @@ const ORCHESTRATION_TOOL_SET = new Set(ORCHESTRATION_TOOLS);
 
 export const VALIDATOR_PROMPT = `
 --- SUBAGENTS ONCE ---
-Delegation is optional. Do not call Agent for work the parent can complete reliably within one context window.
+Delegation is optional. Evaluate all three gates silently before every Agent call. If any gate fails, continue locally without announcing the gate decision.
+
+Gate 1 — Necessity: do not delegate work the parent can complete reliably within one context window.
+
+Gate 2 — Independent value: the agent must provide a distinct investigation, challenge, implementation, or review, not duplicate the parent's work or supply reassurance by vote. Parallel sibling calls must be independent and non-overlapping.
+
+Gate 3 — Handoff readiness: give the agent a narrow, self-contained task with relevant evidence, files or artifacts, preserved constraints, and an explicit expected output. Use reviewer only after a concrete artifact exists.
 
 Available roles:
 - general: autonomous worker for a narrow, self-contained task.
 - oracle: independent second opinion that challenges direction or assumptions.
 - reviewer: independent review of a finished artifact; it may use bash to run tests.
 
-Give every agent a self-contained prompt with relevant evidence, constraints, file paths, and expected output. Zero, one, or several Agent calls are allowed. Parallel sibling calls must be independent; do not delegate duplicate work or repeat a delegated investigation in the parent. Prefer background agents for parallel fan-out; the backend queues at most four background agents concurrently and uses smart join.
+Zero, one, or several Agent calls are allowed after the gates pass. Prefer background agents for parallel fan-out; the backend queues at most four background agents concurrently and uses smart join.
 
 Choose model, thinking, run_in_background, inherit_context, and isolation per call. Use isolation: "worktree" only when that call needs filesystem isolation. Scheduling and nested delegation are disabled.
 
