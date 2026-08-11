@@ -250,8 +250,9 @@ const MODEL_ALIASES: Record<string, string> = {
   "gpt-5-6-terra": "gpt-5.6-terra",
 };
 
-// USD per million tokens. Current models come from Cursor's Models & Pricing
-// pages; older fallback models use the MIT-licensed oh-my-pi catalog.
+// USD per million tokens. Sources: https://cursor.com/docs/models-and-pricing
+// and https://cursor.com/docs/models/. Older fallback models use the MIT-licensed
+// https://github.com/can1357/oh-my-pi catalog.
 const STANDARD_RATES: Record<string, TokenRates> = {
   "claude-fable-5": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 50 },
   "claude-haiku-4-5": { input: 1, cacheWrite: 1.25, cacheRead: 0.1, output: 5 },
