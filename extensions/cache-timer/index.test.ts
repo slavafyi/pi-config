@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cacheDisplay, cacheWindowMs } from "./index.ts";
+import cacheTimer, { cacheDisplay, cacheWindowMs } from "./index.ts";
 
 const MINUTE_MS = 60_000;
 
@@ -24,4 +24,44 @@ test("dims, warns, and expires at the configured thresholds", () => {
   assert.deepEqual(cacheDisplay(0, windowMs, 3.5 * MINUTE_MS), { text: "cache 1:30", tone: "warning" });
   assert.deepEqual(cacheDisplay(0, windowMs, windowMs - 1_000), { text: "cache 0:01", tone: "warning" });
   assert.deepEqual(cacheDisplay(0, windowMs, windowMs), { text: "cache expired", tone: "error" });
+});
+
+test("starts optimistically and restores the last successful request after an error", () => {
+  const now = 1_800_000_000_000;
+  const originalNow = Date.now;
+  Date.now = () => now;
+
+  const handlers = new Map<string, (event: any, ctx: any) => void>();
+  const statuses: Array<string | undefined> = [];
+  const previous = {
+    role: "assistant",
+    provider: "openai-codex",
+    model: "gpt-5.6-sol",
+    stopReason: "stop",
+    timestamp: now - MINUTE_MS,
+  };
+  const ctx = {
+    model: { provider: "openai-codex", id: "gpt-5.6-sol" },
+    sessionManager: { getBranch: () => [{ type: "message", message: previous }] },
+    ui: {
+      setStatus: (_id: string, value: string | undefined) => statuses.push(value),
+      theme: { fg: (tone: string, text: string) => `${tone}:${text}` },
+    },
+  };
+
+  try {
+    cacheTimer({ on: (event: string, handler: (event: any, ctx: any) => void) => handlers.set(event, handler) } as any);
+    handlers.get("session_start")?.({}, ctx);
+    assert.equal(statuses.at(-1), "dim:cache 4:00");
+
+    handlers.get("turn_start")?.({ timestamp: now }, ctx);
+    assert.equal(statuses.at(-1), "dim:cache 5:00");
+
+    handlers.get("turn_end")?.({ message: { ...previous, stopReason: "error", timestamp: now } }, ctx);
+    assert.equal(statuses.at(-1), "dim:cache 4:00");
+
+    handlers.get("session_shutdown")?.({}, ctx);
+  } finally {
+    Date.now = originalNow;
+  }
 });

@@ -41,53 +41,96 @@ function isSuccessful(message: AgentMessage): message is AssistantMessage {
   return message.role === "assistant" && message.stopReason !== "aborted" && message.stopReason !== "error";
 }
 
+interface CacheAnchor {
+  provider: string;
+  model: string;
+  timestamp: number;
+  windowMs: number;
+}
+
 export default function cacheTimer(pi: ExtensionAPI) {
   let interval: ReturnType<typeof setInterval> | undefined;
+  let confirmed: CacheAnchor | undefined;
 
-  function clear(ctx: ExtensionContext) {
+  function stopInterval() {
     if (interval) clearInterval(interval);
     interval = undefined;
+  }
+
+  function hide(ctx: ExtensionContext) {
+    stopInterval();
     ctx.ui.setStatus(STATUS_ID, undefined);
   }
 
-  function start(ctx: ExtensionContext, message: AgentMessage) {
-    clear(ctx);
-    if (!ctx.model || !isSuccessful(message)) return;
-    if (message.provider !== ctx.model.provider || message.model !== ctx.model.id) return;
+  function reset(ctx: ExtensionContext) {
+    confirmed = undefined;
+    hide(ctx);
+  }
 
-    const windowMs = cacheWindowMs(message.provider, message.model);
-    if (!windowMs) return;
+  function anchor(provider: string, model: string, timestamp: number): CacheAnchor | undefined {
+    const windowMs = cacheWindowMs(provider, model);
+    return windowMs ? { provider, model, timestamp, windowMs } : undefined;
+  }
+
+  function isCurrent(ctx: ExtensionContext, value: CacheAnchor): boolean {
+    return ctx.model?.provider === value.provider && ctx.model.id === value.model;
+  }
+
+  function show(ctx: ExtensionContext, value: CacheAnchor) {
+    stopInterval();
+    if (!isCurrent(ctx, value)) {
+      hide(ctx);
+      return;
+    }
 
     const update = () => {
-      const display = cacheDisplay(message.timestamp, windowMs);
+      const display = cacheDisplay(value.timestamp, value.windowMs);
       ctx.ui.setStatus(STATUS_ID, ctx.ui.theme.fg(display.tone, display.text));
-      if (display.tone === "error" && interval) {
-        clearInterval(interval);
-        interval = undefined;
-      }
+      if (display.tone === "error") stopInterval();
     };
 
     update();
-    if (message.timestamp + windowMs > Date.now()) interval = setInterval(update, 1_000);
+    if (value.timestamp + value.windowMs > Date.now()) interval = setInterval(update, 1_000);
   }
 
   function restore(ctx: ExtensionContext) {
-    clear(ctx);
+    reset(ctx);
     if (!ctx.model || !cacheWindowMs(ctx.model.provider, ctx.model.id)) return;
 
     const branch = ctx.sessionManager.getBranch();
     for (let index = branch.length - 1; index >= 0; index--) {
       const entry = branch[index];
-      if (entry?.type !== "message" || entry.message.role !== "assistant") continue;
-      start(ctx, entry.message);
+      if (entry?.type !== "message" || !isSuccessful(entry.message)) continue;
+      const restored = anchor(entry.message.provider, entry.message.model, entry.message.timestamp);
+      if (restored && isCurrent(ctx, restored)) {
+        confirmed = restored;
+        show(ctx, restored);
+      }
       return;
     }
   }
 
   pi.on("session_start", (_event, ctx) => restore(ctx));
-  pi.on("model_select", (_event, ctx) => clear(ctx));
-  pi.on("turn_end", (event, ctx) => start(ctx, event.message));
-  pi.on("session_tree", (event, ctx) => (event.summaryEntry ? clear(ctx) : restore(ctx)));
-  pi.on("session_compact", (_event, ctx) => clear(ctx));
-  pi.on("session_shutdown", (_event, ctx) => clear(ctx));
+  pi.on("model_select", (_event, ctx) => reset(ctx));
+  pi.on("turn_start", (event, ctx) => {
+    if (!ctx.model) return reset(ctx);
+    const pending = anchor(ctx.model.provider, ctx.model.id, event.timestamp);
+    if (pending) show(ctx, pending);
+    else reset(ctx);
+  });
+  pi.on("turn_end", (event, ctx) => {
+    if (isSuccessful(event.message)) {
+      const completed = anchor(event.message.provider, event.message.model, event.message.timestamp);
+      if (completed && isCurrent(ctx, completed)) {
+        confirmed = completed;
+        show(ctx, completed);
+        return;
+      }
+    }
+    if (confirmed && isCurrent(ctx, confirmed)) show(ctx, confirmed);
+    else hide(ctx);
+  });
+  pi.on("session_tree", (event, ctx) => (event.summaryEntry ? reset(ctx) : restore(ctx)));
+  pi.on("session_compact", (_event, ctx) => reset(ctx));
+  pi.on("session_shutdown", (_event, ctx) => reset(ctx));
 }

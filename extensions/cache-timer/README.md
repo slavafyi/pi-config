@@ -4,9 +4,10 @@ Shows the remaining prompt-cache window in Pi's footer. This helps avoid an
 unexpected cache miss after leaving an expensive conversation idle.
 
 The timer is dim while the cache window is healthy, becomes a warning for the
-last 30%, and shows `cache expired` when the window ends. Expiration means the
-documented or observed window ended; the provider may retain a cache entry
-longer.
+last 30%, and shows `cache expired` when the window ends. Each model request
+resets it; it keeps ticking while the model streams and while tools run.
+Expiration means the documented or observed window ended; the provider may
+retain a cache entry longer.
 
 ## Cache windows
 
