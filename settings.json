@@ -28,5 +28,6 @@
     "model": "gpt-5.6-luna",
     "thinkingLevel": "low"
   },
-  "hideThinkingBlock": false
+  "hideThinkingBlock": false,
+  "showCacheMissNotices": true
 }
