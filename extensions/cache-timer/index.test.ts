@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cacheDisplay, cacheWindowMs } from "./cache-timer.ts";
+import { cacheDisplay, cacheWindowMs } from "./index.ts";
 
 const MINUTE_MS = 60_000;
 
