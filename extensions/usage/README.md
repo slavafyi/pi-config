@@ -6,11 +6,15 @@ messages.
 
 ## Setup
 
-CodexBar CLI is installed by the platform's `setup_pi` script: Homebrew on
-macOS and AUR on Arch. Fedora and Debian do not install it.
+Install the [CodexBar](https://github.com/steipete/CodexBar) CLI:
 
 ```sh
-./install.sh setup_pi
+# Homebrew on macOS or Linux
+brew install steipete/tap/codexbar
+
+# Arch Linux
+# yay -S codexbar-cli
+
 codexbar --version
 ```
 

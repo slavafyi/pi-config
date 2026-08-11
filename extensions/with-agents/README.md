@@ -94,11 +94,7 @@ Profiles live in the Tintinweb global agent directory:
 $PI_CODING_AGENT_DIR/agents/
 ```
 
-In this repository that directory is installed from:
-
-```text
-configs/pi/.config/pi/agent/agents/
-```
+In this repository, they are defined in `agents/`.
 
 ## Backend settings
 
@@ -142,6 +138,10 @@ while the corresponding manager record remains in memory.
 
 ## Installation
 
+Follow the setup instructions in the repository's root [README](../../README.md).
+Pi loads this extension from `extensions/with-agents/` and the agent profiles
+from `agents/`.
+
 `settings.json` temporarily loads the commit from upstream PR
 [tintinweb/pi-subagents#205](https://github.com/tintinweb/pi-subagents/pull/205):
 
@@ -154,33 +154,25 @@ git:github.com/tintinweb/pi-subagents@09281cef7adc526cefe32b1ff69a0cf3396751ad
 The pinned commit is version `0.14.3` plus parent-session lineage for persisted
 subagents. Recheck the package's tool and settings API when removing the pin.
 
-Apply the Pi component through GNU Stow from the repository root:
-
-```bash
-stow --dir configs --target "$HOME" --stow pi
-```
-
-Do not create symlinks manually.
-
 ## Validation
 
 Run the state-machine test:
 
 ```bash
 node --experimental-strip-types \
-  configs/pi/.config/pi/agent/extensions/with-agents/contract-test.ts
+  extensions/with-agents/contract-test.ts
 ```
 
 Check formatting and extension loading:
 
 ```bash
 pnpm dlx oxfmt@latest --check \
-  configs/pi/.config/pi/agent/extensions/with-agents/index.ts \
-  configs/pi/.config/pi/agent/extensions/with-agents/policy.ts \
-  configs/pi/.config/pi/agent/extensions/with-agents/contract-test.ts
+  extensions/with-agents/index.ts \
+  extensions/with-agents/policy.ts \
+  extensions/with-agents/contract-test.ts
 
 pi --no-extensions --no-session \
-  -e configs/pi/.config/pi/agent/extensions/with-agents/index.ts \
+  -e extensions/with-agents/index.ts \
   --list-models >/dev/null
 ```
 
