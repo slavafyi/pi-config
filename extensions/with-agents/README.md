@@ -47,11 +47,6 @@ A later `/with-agents` can use `get_subagent_result`, `steer_subagent`, or
 `Agent({ resume: "..." })` with agent IDs that Tintinweb still holds in its
 manager.
 
-This repository does not install `/tools`. If an externally installed `/tools`
-extension disables any orchestration tool, `/with-agents` reports the inactive
-tools and does not arm until they are enabled again. Enabling them controls
-availability, not authorization: `/with-agents` is still required.
-
 ## Policy
 
 The parent silently evaluates three gates before every `Agent` call. If any
@@ -185,21 +180,3 @@ pi --no-extensions --no-session \
   -e extensions/with-agents/index.ts \
   --list-models >/dev/null
 ```
-
-Manual smoke test:
-
-1. Start a new Pi session and confirm all three orchestration tools are active.
-2. Without arming, attempt an orchestration call and confirm the extension
-   blocks it.
-3. Run `/with-agents`; confirm only the toast appears.
-4. Submit a prompt and confirm `Agent`, `get_subagent_result`, and
-   `steer_subagent` are authorized during that run.
-5. Start several independent background agents and confirm no more than four
-   run concurrently and Tintinweb renders their standard UI.
-6. Let the initial parent run settle while background agents continue and
-   confirm orchestration remains authorized.
-7. Let the completion notifications finish and confirm orchestration is blocked
-   after the final resulting run settles.
-8. Disable an orchestration tool with an external `/tools`, then confirm
-   `/with-agents` refuses to arm until it is enabled again.
-9. Arm again and resume or query an agent whose ID is still in manager memory.
