@@ -12,10 +12,13 @@ import {
   reset,
   settleParentRun,
   startParentRun,
-} from "./policy.js";
+} from "./policy.ts";
 
-const ORCHESTRATION_TOOLS = ["Agent", "get_subagent_result", "steer_subagent"];
+export const ORCHESTRATION_TOOLS = ["Agent", "get_subagent_result", "steer_subagent"];
 const ORCHESTRATION_TOOL_SET = new Set(ORCHESTRATION_TOOLS);
+
+export const ACTIVE_MARKER = "WITH AGENTS ENABLED FOR THIS PARENT RUN";
+export const AGENT_GUARD_PROMPT = `Subagent orchestration tools are authorized only when the current parent run includes an extension-generated "${ACTIVE_MARKER}" control message. Without it, work locally and do not call Agent, get_subagent_result, or steer_subagent.`;
 
 export const VALIDATOR_PROMPT = `
 --- WITH AGENTS ---
@@ -44,17 +47,7 @@ The parent owns integration and must verify agent-produced changes before report
 export default function subagentsOnce(pi: ExtensionAPI) {
   const state = createState();
 
-  const hideTools = () => {
-    pi.setActiveTools(pi.getActiveTools().filter((name) => !ORCHESTRATION_TOOL_SET.has(name)));
-  };
-  const showTools = () => {
-    pi.setActiveTools([...new Set([...pi.getActiveTools(), ...ORCHESTRATION_TOOLS])]);
-  };
-
-  pi.on("session_start", () => {
-    reset(state);
-    hideTools();
-  });
+  pi.on("session_start", () => reset(state));
 
   pi.registerCommand("with-agents", {
     description: "Enable subagent orchestration for the next user prompt",
@@ -71,6 +64,14 @@ export default function subagentsOnce(pi: ExtensionAPI) {
         ctx.ui.notify(`Cannot enable agents: missing ${missing.join(", ")}.`, "error");
         return;
       }
+      const inactive = ORCHESTRATION_TOOLS.filter((name) => !pi.getActiveTools().includes(name));
+      if (inactive.length) {
+        ctx.ui.notify(
+          `Cannot enable agents: inactive ${inactive.join(", ")}. Enable them with /tools first.`,
+          "error",
+        );
+        return;
+      }
       if (!arm(state)) {
         ctx.ui.notify("Agents are already enabled or active.", "info");
         return;
@@ -81,7 +82,7 @@ export default function subagentsOnce(pi: ExtensionAPI) {
   });
 
   pi.on("input", (event) => {
-    if (noteUserPrompt(state, event.source)) showTools();
+    noteUserPrompt(state, event.source);
   });
 
   pi.on("tool_result", (event) => {
@@ -116,17 +117,39 @@ export default function subagentsOnce(pi: ExtensionAPI) {
     consumeBackgroundNotification(state, ids);
   });
 
-  pi.on("before_agent_start", (event, ctx) => {
-    if (!startParentRun(state)) return;
+  pi.on("before_agent_start", (event) => {
+    startParentRun(state);
+    return { systemPrompt: `${event.systemPrompt}\n\n${AGENT_GUARD_PROMPT}` };
+  });
+
+  pi.on("context", (event, ctx) => {
+    if (state.phase !== "active") return;
     const usage = formatContextUsage(ctx.getContextUsage());
     const validatorPrompt = VALIDATOR_PROMPT.replace(
       "{{CONTEXT_USAGE}}\n",
       usage ? `${usage}\n` : "",
     );
-    return { systemPrompt: `${event.systemPrompt}\n\n${validatorPrompt}` };
+    return {
+      messages: [
+        ...event.messages,
+        {
+          role: "custom",
+          customType: "with-agents-policy",
+          content: `${ACTIVE_MARKER}\n\n${validatorPrompt}`,
+          display: false,
+          timestamp: Date.now(),
+        },
+      ],
+    };
+  });
+
+  pi.on("tool_call", (event) => {
+    if (ORCHESTRATION_TOOL_SET.has(event.toolName) && state.phase !== "active") {
+      return { block: true, reason: "Run /with-agents before using subagent tools." };
+    }
   });
 
   pi.on("agent_settled", () => {
-    if (settleParentRun(state)) hideTools();
+    settleParentRun(state);
   });
 }
