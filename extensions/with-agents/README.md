@@ -2,12 +2,14 @@
 
 `with-agents` is a small policy gate around
 `@tintinweb/pi-subagents`. Tintinweb owns agent execution, persistence,
-concurrency, resume, steering, transcripts, and UI. This extension only controls
-when its three model-facing orchestration tools are active.
+concurrency, resume, steering, transcripts, and UI. This extension authorizes
+its three model-facing orchestration tools for one parent run without changing
+the active tool set or invalidating the cached prompt prefix.
 
 ## Behavior
 
-At session start, these tools are registered but hidden from the parent model:
+These orchestration tools stay active so their schemas remain a stable part of
+the provider payload:
 
 - `Agent`
 - `get_subagent_result`
@@ -20,16 +22,22 @@ Run the command before the prompt that may use subagents:
 ```
 
 The command shows a short toast and arms only the next user prompt. It does not
-add a footer status, widget, renderer, or custom runtime. When that prompt
-starts, all three orchestration tools become active and the parent receives the
-validator policy. The parent may make zero, one, or several `Agent` calls.
-Independent sibling calls can run in parallel.
+add a footer status, widget, renderer, or custom runtime. A short, static system
+instruction tells the parent that orchestration requires an extension-generated
+control message. The armed run receives that control message, the validator
+policy, and a context-usage snapshot as a temporary suffix through Pi's
+`context` event. The suffix is not stored in session history.
+
+The parent may make zero, one, or several `Agent` calls. Independent sibling
+calls can run in parallel. Outside the authorized run, the extension blocks
+`Agent`, `get_subagent_result`, and `steer_subagent` at `tool_call`, even though
+their stable schemas remain visible to the model.
 
 If the parent run reaches `agent_settled` with no background agents, the
-orchestration tools are hidden again. Otherwise they stay active while those
-agents run and while Tintinweb delivers their completion notifications. They
-are hidden after every tracked background result has been delivered or consumed
-and the resulting parent run reaches `agent_settled`.
+authorization is revoked. Otherwise it stays active while those agents run and
+while Tintinweb delivers their completion notifications. It is revoked after
+every tracked background result has been delivered or consumed and the
+resulting parent run reaches `agent_settled`.
 
 Tintinweb shows running agents in its `● Agents` widget. The widget includes
 foreground and background agents, while the below-editor FleetView is disabled
@@ -38,10 +46,6 @@ globally.
 A later `/with-agents` can use `get_subagent_result`, `steer_subagent`, or
 `Agent({ resume: "..." })` with agent IDs that Tintinweb still holds in its
 manager.
-
-`/tools` remains an explicit manual override. Enabling orchestration tools there
-makes them available without arming or validator instructions until the user
-turns them off or a new session restores the default hidden state.
 
 ## Policy
 
@@ -58,10 +62,11 @@ gate fails, it continues locally without announcing the decision:
    artifacts, preserved constraints, and expected output. Use `reviewer` only
    after a concrete artifact exists.
 
-At parent-run start, the validator receives a context snapshot from
-`ctx.getContextUsage()`, including used and remaining tokens and percentages.
-Immediately after compaction, Pi may temporarily report usage as unknown; the
-validator says so rather than inventing a remainder.
+On each provider call in an authorized run, the temporary validator suffix
+receives a context snapshot from `ctx.getContextUsage()`, including used and
+remaining tokens and percentages. Immediately after compaction, Pi may
+temporarily report usage as unknown; the validator says so rather than
+inventing a remainder.
 
 After the gates pass, zero, one, or several calls are allowed. The parent also
 chooses model, thinking, background mode, context inheritance, and isolation
@@ -175,17 +180,3 @@ pi --no-extensions --no-session \
   -e extensions/with-agents/index.ts \
   --list-models >/dev/null
 ```
-
-Manual smoke test:
-
-1. Start a new Pi session and confirm all three orchestration tools are hidden.
-2. Run `/with-agents`; confirm only the toast appears.
-3. Submit a prompt and confirm `Agent`, `get_subagent_result`, and
-   `steer_subagent` are available during that run.
-4. Start several independent background agents and confirm no more than four
-   run concurrently and Tintinweb renders their standard UI.
-5. Let the initial parent run settle while background agents continue and
-   confirm all three tools remain active.
-6. Let the completion notifications finish and confirm the tools disappear
-   after the final resulting run settles.
-7. Arm again and resume or query an agent whose ID is still in manager memory.

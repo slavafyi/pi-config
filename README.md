@@ -49,7 +49,6 @@ of one. Pi's default agents are disabled in favor of these definitions.
 | Extension | What it provides |
 |-----------|------------------|
 | `cache-timer` | Cache-expiry countdown for GPT-5.6 and Claude; unsupported Cursor models stay hidden |
-| `tools` | `/tools` command for enabling or disabling session tools |
 | `usage` | Codex and Cursor quota status and Cursor cost estimates |
 | `with-agents` | `/with-agents` policy gate for subagent orchestration |
 
