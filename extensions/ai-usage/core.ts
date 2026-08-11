@@ -1,28 +1,25 @@
-export interface UsageMetric {
-  label: string;
-  percent: number;
-  value: string;
-  detail: string;
+export interface UsageWindow {
+  usedPercent: number;
+  windowMinutes: number;
+  resetsAt?: string;
 }
-
-export type UsageSection =
-  | ({ type: "metric" } & UsageMetric)
-  | { type: "text"; label: string; value: string }
-  | { type: "block"; label: string; body: string[] }
-  | { type: "spacer" };
 
 export interface UsageEntry {
-  id: string;
-  name: string;
-  plan: string | null;
-  error: string | null;
-  metrics: UsageMetric[];
-  sections: UsageSection[];
+  provider: string;
+  source: string;
+  usage?: {
+    primary: UsageWindow | null;
+    secondary: UsageWindow | null;
+    tertiary: UsageWindow | null;
+  };
+  error?: {
+    code: number;
+    message: string;
+    kind?: string;
+  };
 }
 
-export interface UsageReport {
-  entries: UsageEntry[];
-}
+export type UsageReport = UsageEntry[];
 
 export interface QuotaStatus {
   window: string;
@@ -67,113 +64,105 @@ function readString(value: unknown, field: string): string {
   return value;
 }
 
-function readMetric(value: unknown): UsageMetric {
-  if (!isRecord(value)) throw new Error("invalid metric");
-  const percent = value.percent;
-  if (!Number.isInteger(percent) || (percent as number) < 0 || (percent as number) > 65_535) {
-    throw new Error("invalid metric.percent");
+function readWindow(value: unknown, field: string): UsageWindow | null {
+  if (value === null) return null;
+  if (!isRecord(value)) throw new Error(`invalid ${field}`);
+  const usedPercent = value.usedPercent;
+  const windowMinutes = value.windowMinutes;
+  if (
+    typeof usedPercent !== "number" ||
+    !Number.isFinite(usedPercent) ||
+    usedPercent < 0 ||
+    usedPercent > 100
+  ) {
+    throw new Error(`invalid ${field}.usedPercent`);
+  }
+  if (!Number.isInteger(windowMinutes) || (windowMinutes as number) <= 0) {
+    throw new Error(`invalid ${field}.windowMinutes`);
+  }
+  if (
+    value.resetsAt !== undefined &&
+    (typeof value.resetsAt !== "string" || !Number.isFinite(Date.parse(value.resetsAt)))
+  ) {
+    throw new Error(`invalid ${field}.resetsAt`);
   }
   return {
-    label: readString(value.label, "metric.label"),
-    percent: percent as number,
-    value: readString(value.value, "metric.value"),
-    detail: readString(value.detail, "metric.detail"),
+    usedPercent,
+    windowMinutes: windowMinutes as number,
+    ...(value.resetsAt ? { resetsAt: value.resetsAt } : {}),
   };
-}
-
-function readSection(value: unknown): UsageSection {
-  if (!isRecord(value)) throw new Error("invalid section");
-  switch (value.type) {
-    case "metric":
-      return { type: "metric", ...readMetric(value) };
-    case "text":
-      return {
-        type: "text",
-        label: readString(value.label, "section.label"),
-        value: readString(value.value, "section.value"),
-      };
-    case "block":
-      if (!Array.isArray(value.body) || !value.body.every((line) => typeof line === "string")) {
-        throw new Error("invalid section.body");
-      }
-      return {
-        type: "block",
-        label: readString(value.label, "section.label"),
-        body: value.body,
-      };
-    case "spacer":
-      return { type: "spacer" };
-    default:
-      throw new Error("invalid section.type");
-  }
 }
 
 function readEntry(value: unknown): UsageEntry {
   if (!isRecord(value)) throw new Error("invalid entry");
-  if (!Array.isArray(value.metrics) || !Array.isArray(value.sections)) {
-    throw new Error("invalid entry collections");
-  }
-  if (value.plan !== null && typeof value.plan !== "string") throw new Error("invalid entry.plan");
-  if (value.error !== null && typeof value.error !== "string")
-    throw new Error("invalid entry.error");
-  return {
-    id: readString(value.id, "entry.id"),
-    name: readString(value.name, "entry.name"),
-    plan: value.plan,
-    error: value.error,
-    metrics: value.metrics.map(readMetric),
-    sections: value.sections.map(readSection),
+  const entry: UsageEntry = {
+    provider: readString(value.provider, "entry.provider"),
+    source: readString(value.source, "entry.source"),
   };
+  if (value.usage !== undefined && value.usage !== null) {
+    if (!isRecord(value.usage)) throw new Error("invalid entry.usage");
+    entry.usage = {
+      primary: readWindow(value.usage.primary, "usage.primary"),
+      secondary: readWindow(value.usage.secondary, "usage.secondary"),
+      tertiary: readWindow(value.usage.tertiary, "usage.tertiary"),
+    };
+  }
+  if (value.error !== undefined && value.error !== null) {
+    if (!isRecord(value.error) || !Number.isInteger(value.error.code)) {
+      throw new Error("invalid entry.error");
+    }
+    entry.error = {
+      code: value.error.code as number,
+      message: readString(value.error.message, "error.message"),
+      ...(typeof value.error.kind === "string" ? { kind: value.error.kind } : {}),
+    };
+  }
+  if (!entry.usage && !entry.error) throw new Error("entry has neither usage nor error");
+  return entry;
 }
 
 export function parseUsageReport(text: string): UsageReport {
   const value: unknown = JSON.parse(text);
-  if (!isRecord(value) || !Array.isArray(value.entries)) throw new Error("invalid usage report");
-  const entries = value.entries.map(readEntry);
-  if (new Set(entries.map((entry) => entry.id)).size !== entries.length) {
-    throw new Error("duplicate usage entry id");
+  if (!Array.isArray(value)) throw new Error("invalid usage report");
+  const entries = value.map(readEntry);
+  if (new Set(entries.map((entry) => entry.provider)).size !== entries.length) {
+    throw new Error("duplicate usage provider");
   }
-  return { entries };
+  return entries;
 }
 
-function normalizeReset(value: string): string | undefined {
-  const reset = value
-    .trim()
-    .replace(/^resets\s+/i, "")
-    .replace(/(\d[dhms])\s+(?=\d+[dhms]\b)/g, "$1");
-  return reset && reset !== "—" ? reset : undefined;
+function formatReset(resetsAt: string | undefined, now: Date): string | undefined {
+  if (!resetsAt) return undefined;
+  const milliseconds = Date.parse(resetsAt) - now.getTime();
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return undefined;
+  let minutes = Math.ceil(milliseconds / 60_000);
+  const days = Math.floor(minutes / 1_440);
+  minutes %= 1_440;
+  const hours = Math.floor(minutes / 60);
+  minutes %= 60;
+  return `in ${days ? `${days}d` : ""}${hours ? `${hours}h` : ""}${minutes ? `${minutes}m` : ""}`;
 }
 
-function resetFromMetric(metric: UsageMetric): string | undefined {
-  const match = /\bresets\s+(.+)$/i.exec(metric.detail);
-  return match?.[1] ? normalizeReset(match[1].split(" · ", 1)[0] ?? "") : undefined;
+function windowLabel(minutes: number): string {
+  if (minutes % 1_440 === 0) return `${minutes / 1_440}d`;
+  if (minutes % 60 === 0) return `${minutes / 60}h`;
+  return `${minutes}m`;
 }
 
-function resetFromSections(entry: UsageEntry): string | undefined {
-  const section = entry.sections.find(
-    (item): item is Extract<UsageSection, { type: "text" }> =>
-      item.type === "text" && item.label.toLowerCase() === "resets",
-  );
-  return section ? normalizeReset(section.value) : undefined;
-}
-
-function quota(metric: UsageMetric, window: string, reset?: string, pool?: string): QuotaStatus {
+function quota(value: UsageWindow, window: string, now: Date, pool?: string): QuotaStatus {
+  const reset = formatReset(value.resetsAt, now);
   return {
     window,
-    usedPercent: metric.percent,
-    leftPercent: Math.max(0, 100 - metric.percent),
+    usedPercent: value.usedPercent,
+    leftPercent: Math.max(0, Math.round(100 - value.usedPercent)),
     ...(reset ? { reset } : {}),
     ...(pool ? { pool } : {}),
   };
 }
 
-export function selectOpenAiQuota(entry: UsageEntry): QuotaStatus | undefined {
-  const weekly = entry.metrics.find((metric) => /codex weekly|\b7d\b/i.test(metric.label));
-  if (weekly) return quota(weekly, "7d", resetFromMetric(weekly));
-  const session = entry.metrics.find((metric) => /codex 5h|\b5h\b/i.test(metric.label));
-  if (session) return quota(session, "5h", resetFromMetric(session));
-  const first = entry.metrics[0];
-  return first ? quota(first, first.label, resetFromMetric(first)) : undefined;
+export function selectOpenAiQuota(entry: UsageEntry, now = new Date()): QuotaStatus | undefined {
+  const value = entry.usage?.secondary ?? entry.usage?.primary;
+  return value ? quota(value, windowLabel(value.windowMinutes), now) : undefined;
 }
 
 export function normalizeCursorModelId(modelId: string): NormalizedModel {
@@ -193,37 +182,46 @@ export function normalizeCursorModelId(modelId: string): NormalizedModel {
   return { base, fast };
 }
 
-export function preferredCursorPool(modelId: string): "Cursor Models" | "Other Models" {
+export function preferredCursorPool(modelId: string): "Auto" | "API" {
   const { base } = normalizeCursorModelId(modelId);
-  return base === "default" || base.startsWith("composer-") || base === "grok-4.5"
-    ? "Cursor Models"
-    : "Other Models";
+  return base === "auto" || base === "default" || base.startsWith("composer-") ? "Auto" : "API";
 }
 
-export function selectCursorQuota(entry: UsageEntry, modelId: string): QuotaStatus | undefined {
-  const preferred = preferredCursorPool(modelId);
-  const metric =
-    entry.metrics.find((item) => item.label === preferred) ??
-    entry.metrics.find((item) => item.label === "Cursor Models") ??
-    entry.metrics[0];
-  return metric ? quota(metric, "cycle", resetFromSections(entry), metric.label) : undefined;
+export function selectCursorQuota(
+  entry: UsageEntry,
+  modelId: string,
+  now = new Date(),
+): QuotaStatus | undefined {
+  const preferredPool = preferredCursorPool(modelId);
+  const preferred = preferredPool === "Auto" ? entry.usage?.secondary : entry.usage?.tertiary;
+  const other = preferredPool === "Auto" ? entry.usage?.tertiary : entry.usage?.secondary;
+  const value = preferred ?? entry.usage?.primary ?? other;
+  const label = preferred
+    ? preferredPool.toLowerCase()
+    : entry.usage?.primary
+      ? "total"
+      : preferredPool === "Auto"
+        ? "api"
+        : "auto";
+  return value ? quota(value, label, now, label) : undefined;
 }
 
 export function selectQuota(
   report: UsageReport,
   provider: string,
   modelId: string,
+  now = new Date(),
 ): { entry?: UsageEntry; quota?: QuotaStatus } {
-  const id = provider === "openai-codex" ? "openai" : provider;
-  const entry = report.entries.find((candidate) => candidate.id === id);
+  const id = provider === "openai-codex" ? "codex" : provider;
+  const entry = report.find((candidate) => candidate.provider === id);
   if (!entry || entry.error) return { entry };
   return {
     entry,
     quota:
       provider === "openai-codex"
-        ? selectOpenAiQuota(entry)
+        ? selectOpenAiQuota(entry, now)
         : provider === "cursor"
-          ? selectCursorQuota(entry, modelId)
+          ? selectCursorQuota(entry, modelId, now)
           : undefined,
   };
 }
@@ -233,7 +231,7 @@ export function formatQuotaStatus(value: QuotaStatus): string {
 }
 
 export function isAuthenticationError(message: string): boolean {
-  return /auth|credential|login|sign[ -]?in|token|database not found/i.test(message);
+  return /auth|credential|login|sign[ -]?in|token|cookie|database not found/i.test(message);
 }
 
 const MODEL_ALIASES: Record<string, string> = {

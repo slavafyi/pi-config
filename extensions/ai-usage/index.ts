@@ -12,35 +12,56 @@ import {
 const STATUS_ID = "ai-usage-status";
 const TTL_MS = 30_000;
 const CLI_TIMEOUT_MS = 25_000;
-const SUPPORTED_PROVIDERS = new Set(["openai-codex", "cursor"]);
+const CODEXBAR_PROVIDERS: Record<string, string> = {
+  "openai-codex": "codex",
+  cursor: "cursor",
+};
 
 export default function aiUsage(pi: ExtensionAPI) {
   let active = false;
-  let cached: { report: UsageReport; fetchedAt: number } | undefined;
-  let inFlight: Promise<UsageReport> | undefined;
+  const cache = new Map<string, { report: UsageReport; fetchedAt: number }>();
+  const inFlight = new Map<string, Promise<UsageReport>>();
   const lastQuota = new Map<string, QuotaStatus>();
 
   function quotaKey(provider: string, modelId: string): string {
     return provider === "cursor" ? `cursor:${preferredCursorPool(modelId)}` : provider;
   }
 
-  async function loadReport(): Promise<UsageReport> {
+  async function loadReport(provider: string): Promise<UsageReport> {
+    const cached = cache.get(provider);
     if (cached && Date.now() - cached.fetchedAt < TTL_MS) return cached.report;
-    if (inFlight) return inFlight;
-    inFlight = (async () => {
-      const result = await pi.exec("mise", ["exec", "--", "ai-usagebar", "usage", "--json"], {
-        timeout: CLI_TIMEOUT_MS,
-      });
+    const pending = inFlight.get(provider);
+    if (pending) return pending;
+    const request = (async () => {
+      const result = await pi.exec(
+        "codexbar",
+        [
+          "usage",
+          "--provider",
+          provider,
+          "--source",
+          "auto",
+          "--format",
+          "json",
+          "--json-only",
+          "--web-timeout",
+          "20",
+          "--log-level",
+          "error",
+        ],
+        { timeout: CLI_TIMEOUT_MS },
+      );
       if (result.killed || !result.stdout.trim()) {
-        throw new Error(result.killed ? "ai-usagebar timed out" : "ai-usagebar returned no JSON");
+        throw new Error(result.killed ? "CodexBar timed out" : "CodexBar returned no JSON");
       }
       const report = parseUsageReport(result.stdout);
-      cached = { report, fetchedAt: Date.now() };
+      cache.set(provider, { report, fetchedAt: Date.now() });
       return report;
     })().finally(() => {
-      inFlight = undefined;
+      inFlight.delete(provider);
     });
-    return inFlight;
+    inFlight.set(provider, request);
+    return request;
   }
 
   function styledQuotaStatus(ctx: ExtensionContext, quota: QuotaStatus): string {
@@ -60,13 +81,14 @@ export default function aiUsage(pi: ExtensionAPI) {
   async function refresh(ctx: ExtensionContext) {
     const provider = ctx.model?.provider;
     const modelId = ctx.model?.id ?? "";
-    if (!provider || !SUPPORTED_PROVIDERS.has(provider)) {
+    const codexBarProvider = provider ? CODEXBAR_PROVIDERS[provider] : undefined;
+    if (!provider || !codexBarProvider) {
       ctx.ui.setStatus(STATUS_ID, undefined);
       return;
     }
     const key = quotaKey(provider, modelId);
     try {
-      const report = await loadReport();
+      const report = await loadReport(codexBarProvider);
       if (!active || ctx.model?.provider !== provider) return;
       const selected = selectQuota(report, provider, ctx.model?.id ?? modelId);
       if (selected.quota) {
@@ -74,7 +96,7 @@ export default function aiUsage(pi: ExtensionAPI) {
         ctx.ui.setStatus(STATUS_ID, styledQuotaStatus(ctx, selected.quota));
         return;
       }
-      if (selected.entry?.error && isAuthenticationError(selected.entry.error)) {
+      if (selected.entry?.error && isAuthenticationError(selected.entry.error.message)) {
         showUnavailable(ctx, provider);
         return;
       }
@@ -101,7 +123,7 @@ export default function aiUsage(pi: ExtensionAPI) {
   });
 
   pi.on("model_select", (_event, ctx) => {
-    if (!ctx.model || !SUPPORTED_PROVIDERS.has(ctx.model.provider)) {
+    if (!ctx.model || !CODEXBAR_PROVIDERS[ctx.model.provider]) {
       ctx.ui.setStatus(STATUS_ID, undefined);
       return;
     }

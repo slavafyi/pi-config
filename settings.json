@@ -15,7 +15,6 @@
     "git:github.com/yusukeshib/pi-datetime",
     "git:github.com/peterp/pi-sidequest",
     "git:github.com/nicobailon/pi-mcp-adapter",
-    "git:github.com/latentminds-ai/pi-quotas",
     "git:github.com/tintinweb/pi-subagents@09281cef7adc526cefe32b1ff69a0cf3396751ad",
     "git:github.com/fitchmultz/pi-cursor-sdk",
     "npm:@ogulcancelik/pi-session-recall"

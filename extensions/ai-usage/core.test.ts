@@ -18,8 +18,8 @@ const fixture = parseUsageReport(
   readFileSync(new URL("./fixtures/usage.json", import.meta.url), "utf8"),
 );
 
-function entry(id: string): UsageEntry {
-  const result = fixture.entries.find((candidate) => candidate.id === id);
+function entry(provider: string): UsageEntry {
+  const result = fixture.find((candidate) => candidate.provider === provider);
   assert.ok(result);
   return result;
 }
@@ -40,48 +40,63 @@ function message(provider = "cursor") {
   };
 }
 
-test("parses the supported ai-usagebar report shape strictly", () => {
+test("parses the supported CodexBar usage shape strictly", () => {
   assert.deepEqual(
-    fixture.entries.map(({ id }) => id),
-    ["openai", "cursor"],
+    fixture.map(({ provider }) => provider),
+    ["codex", "cursor"],
   );
-  assert.throws(() => parseUsageReport('{"entries":[{"id":"openai"}]}'), /invalid/);
+  assert.throws(() => parseUsageReport('{"entries":[]}'), /invalid/);
   assert.throws(
     () =>
       parseUsageReport(
-        '{"entries":[{"id":"x","name":"x","plan":null,"error":null,"metrics":[],"sections":[{"type":"new"}]}]}',
+        '[{"provider":"codex","source":"oauth","usage":{"primary":null,"secondary":{"usedPercent":101,"windowMinutes":10080},"tertiary":null}}]',
       ),
-    /section.type/,
+    /usedPercent/,
   );
 });
 
+const now = new Date("2026-08-11T10:00:00Z");
+
 test("uses the useful OpenAI weekly window and reports percent left", () => {
-  const quota = selectOpenAiQuota(entry("openai"));
+  const quota = selectOpenAiQuota(entry("codex"), now);
   assert.ok(quota);
   assert.equal(quota.usedPercent, 18);
   assert.equal(formatQuotaStatus(quota), "7d:82% left (↺in 4d22h7m)");
 });
 
-test("selects one relevant Cursor pool without combining pools", () => {
-  const composer = selectCursorQuota(entry("cursor"), "composer-2.5:fast");
+test("selects the active Cursor pool without combining pools", () => {
+  const composer = selectCursorQuota(entry("cursor"), "composer-2.5:fast", now);
   assert.ok(composer);
-  assert.equal(composer.pool, "Cursor Models");
-  assert.equal(formatQuotaStatus(composer), "cycle:80% left (↺in 9d4h)");
+  assert.equal(composer.pool, "auto");
+  assert.equal(formatQuotaStatus(composer), "auto:80% left (↺in 9d4h)");
 
-  const gpt = selectCursorQuota(entry("cursor"), "gpt-5.6-sol@1m:slow");
+  const gpt = selectCursorQuota(entry("cursor"), "gpt-5.6-sol@1m:slow", now);
   assert.ok(gpt);
-  assert.equal(gpt.pool, "Other Models");
+  assert.equal(gpt.pool, "api");
   assert.equal(gpt.usedPercent, 55);
-  assert.equal(formatQuotaStatus(gpt), "cycle:45% left (↺in 9d4h)");
+  assert.equal(formatQuotaStatus(gpt), "api:45% left (↺in 9d4h)");
+});
+
+test("falls back to Cursor total when the active pool is absent", () => {
+  const cursor = entry("cursor");
+  assert.ok(cursor.usage?.primary);
+  const total = selectCursorQuota(
+    { ...cursor, usage: { primary: cursor.usage.primary, secondary: null, tertiary: null } },
+    "auto",
+    now,
+  );
+  assert.ok(total);
+  assert.equal(total.pool, "total");
+  assert.equal(formatQuotaStatus(total), "total:99% left (↺in 9d4h)");
 });
 
 test("recognizes an unavailable auth entry", () => {
   const report = parseUsageReport(
     readFileSync(new URL("./fixtures/cursor-unavailable.json", import.meta.url), "utf8"),
   );
-  const selected = selectQuota(report, "cursor", "gpt-5.6-sol");
+  const selected = selectQuota(report, "cursor", "gpt-5.6-sol", now);
   assert.equal(selected.quota, undefined);
-  assert.ok(selected.entry?.error && isAuthenticationError(selected.entry.error));
+  assert.ok(selected.entry?.error && isAuthenticationError(selected.entry.error.message));
 });
 
 test("normalizes context and fast/slow model selectors", () => {

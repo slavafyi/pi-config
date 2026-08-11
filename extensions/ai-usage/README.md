@@ -1,24 +1,28 @@
 # AI usage
 
-This Pi extension shows the active subscription quota in the built-in footer and
-adds an API-equivalent cost estimate to new Cursor assistant messages.
+This Pi extension shows the active Codex or Cursor subscription quota in the
+built-in footer and adds an API-equivalent cost estimate to new Cursor assistant
+messages.
 
 ## Setup
 
-`ai-usagebar` is installed from Git `main` by mise:
+CodexBar CLI is installed by the platform's `setup_pi` script: Homebrew on
+macOS and AUR on Arch. Fedora and Debian do not install it.
 
 ```sh
-mise install
-mise exec -- ai-usagebar usage --json
+./install.sh setup_pi
+codexbar --version
 ```
 
-OpenAI uses the existing `~/.codex/auth.json`. Cursor credentials are resolved
-by ai-usagebar.
+OpenAI uses `~/.codex/auth.json`. Cursor uses the existing cursor.com browser
+session; automatic resolution tries cached cookies, supported browsers, legacy
+sessions, and Cursor IDE auth in that order. No Cursor IDE is required when a
+Firefox session is available.
 
-The machine-local broker config is
-`~/Library/Application Support/ai-usagebar/config.toml`. It enables only
-OpenAI and Cursor. The machine-local pi-quotas config is
-`~/.pi/agent/extensions/quotas.json`, the path pi-quotas 0.3.1 expects.
+```sh
+codexbar usage --provider codex --source auto --format json
+codexbar usage --provider cursor --source auto --format json
+```
 
 Reload Pi after setup:
 
@@ -28,55 +32,61 @@ Reload Pi after setup:
 
 ## Status
 
-The extension refreshes on startup, model changes, and completed turns. It
-caches results for 30 seconds and ai-usagebar applies its own 60-second cache.
-Examples:
+The extension refreshes on startup, model changes, and completed turns. It uses
+a 30-second cache, deduplicates concurrent requests, and keeps the last good
+value through temporary failures.
 
 ```text
 7d:82% left (↺in 4d22h7m)
-cycle:45% left (↺in 9d4h)
+auto:99% left (↺in 30d4h)
+api:97% left (↺in 30d4h)
 ```
 
-OpenAI prefers the weekly Codex window, falling back to the 5-hour window.
-Cursor shows exactly one pool: Cursor Models for Composer, Grok, and Auto;
-Other Models for named third-party models. It never combines the pools or shows
+OpenAI prefers the weekly Codex window. Cursor shows the active category: Auto
+for Auto/Composer and API for explicitly selected models, falling back to Total
+when that category is unavailable. It never combines pools or displays
 balances, spend caps, or on-demand state.
 
-A temporary broker failure keeps the last successful value. Missing credentials
-show `OpenAI: unavailable` or `Cursor: unavailable` without notifications.
+Missing credentials show `OpenAI: unavailable` or `Cursor: unavailable` without
+interrupting Pi. Unsupported Pi providers clear the status. CodexBar also
+supports Kimi, Z.ai/GLM, Alibaba Coding Plan, and Qwen Cloud directly:
 
-## Cursor cost estimate
+```sh
+codexbar usage --provider kimi --format json
+codexbar usage --provider zai --format json
+codexbar usage --provider alibaba-coding-plan --format json
+codexbar usage --provider qwen-cloud --format json
+```
 
-For new Cursor messages, the extension prices Pi's recorded input, output,
-cache-read, and cache-write tokens and writes the complete breakdown to
-`message.usage.cost`. Pi then persists it in session JSONL and includes it in
-the built-in footer and `/tokens`.
+## Tokens and Cursor cost estimate
 
-This dollar value is an estimate, independent of Cursor subscription-pool
-usage. Explicit `:fast` model aliases use separate Fast rates. `:slow` and
-`@context` suffixes are normalized. Documented long-context pricing is used
-only when the recorded prompt exceeds its threshold. No Max Mode uplift or
-team token surcharge is inferred without a reliable message-level signal.
+Pi records token usage natively. Use its built-in `/session` command for input,
+output, cache, total cost, and per-provider/model breakdowns.
 
-Current rates are in `core.ts` under `STANDARD_RATES`, `FAST_RATES`, and
-`LONG_CONTEXT_RATES`. Update them from:
+For new Cursor messages, this extension prices Pi's recorded input, output,
+cache-read, and cache-write tokens and writes the breakdown to
+`message.usage.cost`. Pi persists it in session JSONL and includes it in its
+built-in footer and `/session`.
 
-- <https://cursor.com/docs/models-and-pricing>
-- the model-specific pages under <https://cursor.com/docs/models/>
-- the MIT-licensed oh-my-pi catalog for older fallback models
+The dollar value is an API-equivalent estimate independent of Cursor
+subscription usage. Explicit `:fast` aliases use separate Fast rates. `:slow`
+and `@context` suffixes are normalized. Long-context pricing is used only when
+the recorded prompt exceeds its documented threshold. No Max Mode uplift or
+team surcharge is inferred without a message-level signal.
 
-Unknown models and Fast variants without a confirmed rate remain at zero rather
-than receiving a guessed charge.
+Rates live in `core.ts` under `STANDARD_RATES`, `FAST_RATES`, and
+`LONG_CONTEXT_RATES`. Update them from Cursor's official model pricing pages;
+older fallback rates come from the MIT-licensed oh-my-pi catalog. Unknown models
+remain at zero rather than receiving a guessed charge.
 
 ## Troubleshooting
 
 ```sh
-cursor-agent whoami
-mise exec -- ai-usagebar usage --json | jq '.entries[] | {id, error, metrics}'
+codexbar cache clear --cookies --provider cursor
+codexbar cookie refresh --provider cursor
+codex login
 ```
 
-A valid Cursor Agent login can still receive HTTP 401 from ai-usagebar's
-reverse-engineered dashboard endpoint; this is an upstream broker compatibility
-issue and does not require installing Cursor IDE. If OpenAI is unavailable,
-refresh it with `codex login`. A malformed or slow broker response is ignored
-and does not interrupt Pi turns.
+A malformed, unavailable, or slow CodexBar response is ignored and does not
+interrupt Pi turns. Browser-cookie access may require the permissions described
+by CodexBar for that browser.

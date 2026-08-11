@@ -1,35 +1,11 @@
-{
-  "entries": [
-    {
-      "id": "openai",
-      "name": "openai",
-      "plan": "ChatGPT Plus",
-      "error": null,
-      "metrics": [
-        {
-          "label": "Codex weekly",
-          "percent": 18,
-          "value": "18%",
-          "detail": "Resets in 4d 22h 7m"
-        }
-      ],
-      "sections": [
-        {
-          "type": "metric",
-          "label": "Codex weekly",
-          "percent": 18,
-          "value": "18%",
-          "detail": "Resets in 4d 22h 7m"
-        }
-      ]
-    },
-    {
-      "id": "cursor",
-      "name": "cursor",
-      "plan": null,
-      "error": "credentials error: Cursor session unavailable; run cursor-agent login",
-      "metrics": [],
-      "sections": []
+[
+  {
+    "provider": "cursor",
+    "source": "auto",
+    "error": {
+      "code": 1,
+      "message": "Cursor authentication required",
+      "kind": "provider"
     }
-  ]
-}
+  }
+]

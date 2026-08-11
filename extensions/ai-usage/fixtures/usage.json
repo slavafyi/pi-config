@@ -1,80 +1,40 @@
-{
-  "entries": [
-    {
-      "id": "openai",
-      "name": "openai",
-      "plan": "ChatGPT Plus",
-      "error": null,
-      "metrics": [
-        {
-          "label": "Codex 5h",
-          "percent": 14,
-          "value": "14%",
-          "detail": "Resets in 2h 10m"
-        },
-        {
-          "label": "Codex weekly",
-          "percent": 18,
-          "value": "18%",
-          "detail": "Resets in 4d 22h 7m · 30% elapsed · 12pts under"
-        }
-      ],
-      "sections": [
-        {
-          "type": "metric",
-          "label": "Codex 5h",
-          "percent": 14,
-          "value": "14%",
-          "detail": "Resets in 2h 10m"
-        },
-        {
-          "type": "metric",
-          "label": "Codex weekly",
-          "percent": 18,
-          "value": "18%",
-          "detail": "Resets in 4d 22h 7m · 30% elapsed · 12pts under"
-        }
-      ]
-    },
-    {
-      "id": "cursor",
-      "name": "cursor",
-      "plan": "Cursor Pro",
-      "error": null,
-      "metrics": [
-        {
-          "label": "Cursor Models",
-          "percent": 20,
-          "value": "20%",
-          "detail": "Auto + Composer"
-        },
-        {
-          "label": "Other Models",
-          "percent": 55,
-          "value": "55%",
-          "detail": "Named / API models · on-demand off"
-        }
-      ],
-      "sections": [
-        { "type": "spacer" },
-        {
-          "type": "metric",
-          "label": "Cursor Models",
-          "percent": 20,
-          "value": "20%",
-          "detail": "Auto + Composer"
-        },
-        { "type": "spacer" },
-        {
-          "type": "metric",
-          "label": "Other Models",
-          "percent": 55,
-          "value": "55%",
-          "detail": "Named / API models · on-demand off"
-        },
-        { "type": "spacer" },
-        { "type": "text", "label": "Resets", "value": "in 9d 4h" }
-      ]
+[
+  {
+    "provider": "codex",
+    "source": "oauth",
+    "usage": {
+      "primary": {
+        "usedPercent": 4,
+        "windowMinutes": 300,
+        "resetsAt": "2026-08-11T13:00:00Z"
+      },
+      "secondary": {
+        "usedPercent": 18,
+        "windowMinutes": 10080,
+        "resetsAt": "2026-08-16T08:07:00Z"
+      },
+      "tertiary": null
     }
-  ]
-}
+  },
+  {
+    "provider": "cursor",
+    "source": "web",
+    "usage": {
+      "primary": {
+        "usedPercent": 1,
+        "windowMinutes": 44640,
+        "resetsAt": "2026-08-20T14:00:00Z"
+      },
+      "secondary": {
+        "usedPercent": 20,
+        "windowMinutes": 44640,
+        "resetsAt": "2026-08-20T14:00:00Z"
+      },
+      "tertiary": {
+        "usedPercent": 55,
+        "windowMinutes": 44640,
+        "resetsAt": "2026-08-20T14:00:00Z"
+      }
+    }
+  }
+]
