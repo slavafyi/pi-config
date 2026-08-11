@@ -25,10 +25,15 @@ starts, all three orchestration tools become active and the parent receives the
 validator policy. The parent may make zero, one, or several `Agent` calls.
 Independent sibling calls can run in parallel.
 
-After the parent run reaches `agent_settled`, the orchestration tools are hidden
-again. Background agents are not stopped: Tintinweb continues running them and
-shows its `● Agents` widget. The widget includes foreground and background
-agents, while the below-editor FleetView is disabled globally.
+If the parent run reaches `agent_settled` with no background agents, the
+orchestration tools are hidden again. Otherwise they stay active while those
+agents run and while Tintinweb delivers their completion notifications. They
+are hidden after every tracked background result has been delivered or consumed
+and the resulting parent run reaches `agent_settled`.
+
+Tintinweb shows running agents in its `● Agents` widget. The widget includes
+foreground and background agents, while the below-editor FleetView is disabled
+globally.
 
 A later `/with-agents` can use `get_subagent_result`, `steer_subagent`, or
 `Agent({ resume: "..." })` with agent IDs that Tintinweb still holds in its
@@ -187,6 +192,8 @@ Manual smoke test:
    `steer_subagent` are available during that run.
 4. Start several independent background agents and confirm no more than four
    run concurrently and Tintinweb renders their standard UI.
-5. Let the parent settle and confirm the tools disappear while background
-   agents continue.
-6. Arm again and resume or query an agent whose ID is still in manager memory.
+5. Let the initial parent run settle while background agents continue and
+   confirm all three tools remain active.
+6. Let the completion notifications finish and confirm the tools disappear
+   after the final resulting run settles.
+7. Arm again and resume or query an agent whose ID is still in manager memory.

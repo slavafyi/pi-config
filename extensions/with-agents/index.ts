@@ -2,8 +2,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import {
   arm,
+  completeBackgroundAgent,
+  consumeBackgroundNotification,
+  consumeBackgroundResult,
   createState,
   formatContextUsage,
+  noteBackgroundAgent,
   noteUserPrompt,
   reset,
   settleParentRun,
@@ -78,6 +82,38 @@ export default function subagentsOnce(pi: ExtensionAPI) {
 
   pi.on("input", (event) => {
     if (noteUserPrompt(state, event.source)) showTools();
+  });
+
+  pi.on("tool_result", (event) => {
+    if (event.toolName === "Agent") {
+      const details = event.details as { status?: string; agentId?: string } | undefined;
+      if (details?.status === "background" && details.agentId) {
+        noteBackgroundAgent(state, details.agentId);
+      }
+    } else if (event.toolName === "get_subagent_result") {
+      const input = event.input as { agent_id?: string };
+      if (input.agent_id) consumeBackgroundResult(state, input.agent_id);
+    }
+  });
+
+  for (const eventName of ["subagents:completed", "subagents:failed"]) {
+    pi.events.on(eventName, (data) => {
+      const id = (data as { id?: string }).id;
+      if (id) completeBackgroundAgent(state, id);
+    });
+  }
+
+  pi.on("message_start", (event) => {
+    if (event.message.role !== "custom" || event.message.customType !== "subagent-notification") {
+      return;
+    }
+    const details = event.message.details as
+      | { id?: string; others?: Array<{ id?: string }> }
+      | undefined;
+    const ids = [details?.id, ...(details?.others?.map(({ id }) => id) ?? [])].filter(
+      (id): id is string => Boolean(id),
+    );
+    consumeBackgroundNotification(state, ids);
   });
 
   pi.on("before_agent_start", (event, ctx) => {

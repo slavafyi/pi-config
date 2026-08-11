@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 
 import {
   arm,
+  completeBackgroundAgent,
+  consumeBackgroundNotification,
+  consumeBackgroundResult,
   createState,
   formatContextUsage,
+  noteBackgroundAgent,
   noteUserPrompt,
   reset,
   settleParentRun,
@@ -21,6 +25,26 @@ assert.equal(noteUserPrompt(state, "interactive"), true);
 assert.equal(startParentRun(state), true);
 assert.equal(state.phase, "active");
 assert.equal(noteUserPrompt(state, "interactive"), false);
+assert.equal(settleParentRun(state), true);
+assert.deepEqual(state, createState());
+
+assert.equal(arm(state), true);
+assert.equal(noteUserPrompt(state, "interactive"), true);
+assert.equal(startParentRun(state), true);
+assert.equal(noteBackgroundAgent(state, "background-1"), true);
+assert.equal(settleParentRun(state), false);
+assert.equal(completeBackgroundAgent(state, "background-1"), true);
+assert.equal(settleParentRun(state), false);
+assert.equal(consumeBackgroundNotification(state, ["background-1"]), true);
+assert.equal(settleParentRun(state), true);
+assert.deepEqual(state, createState());
+
+assert.equal(arm(state), true);
+assert.equal(noteUserPrompt(state, "interactive"), true);
+assert.equal(startParentRun(state), true);
+assert.equal(noteBackgroundAgent(state, "background-2"), true);
+assert.equal(completeBackgroundAgent(state, "background-2"), true);
+assert.equal(consumeBackgroundResult(state, "background-2"), true);
 assert.equal(settleParentRun(state), true);
 assert.deepEqual(state, createState());
 

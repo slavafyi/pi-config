@@ -1,6 +1,7 @@
 export type OnceState = {
   phase: "disabled" | "armed" | "active";
   pendingUserPrompt: boolean;
+  backgroundAgents: Map<string, "running" | "completed">;
 };
 
 export type ContextUsage = {
@@ -10,7 +11,7 @@ export type ContextUsage = {
 };
 
 export function createState(): OnceState {
-  return { phase: "disabled", pendingUserPrompt: false };
+  return { phase: "disabled", pendingUserPrompt: false, backgroundAgents: new Map() };
 }
 
 export function arm(state: OnceState): boolean {
@@ -32,8 +33,29 @@ export function startParentRun(state: OnceState): boolean {
   return true;
 }
 
-export function settleParentRun(state: OnceState): boolean {
+export function noteBackgroundAgent(state: OnceState, id: string): boolean {
   if (state.phase !== "active") return false;
+  state.backgroundAgents.set(id, "running");
+  return true;
+}
+
+export function completeBackgroundAgent(state: OnceState, id: string): boolean {
+  if (!state.backgroundAgents.has(id)) return false;
+  state.backgroundAgents.set(id, "completed");
+  return true;
+}
+
+export function consumeBackgroundNotification(state: OnceState, ids: string[]): boolean {
+  return ids.reduce((consumed, id) => state.backgroundAgents.delete(id) || consumed, false);
+}
+
+export function consumeBackgroundResult(state: OnceState, id: string): boolean {
+  if (state.backgroundAgents.get(id) !== "completed") return false;
+  return state.backgroundAgents.delete(id);
+}
+
+export function settleParentRun(state: OnceState): boolean {
+  if (state.phase !== "active" || state.backgroundAgents.size > 0) return false;
   reset(state);
   return true;
 }
@@ -41,6 +63,7 @@ export function settleParentRun(state: OnceState): boolean {
 export function reset(state: OnceState): void {
   state.phase = "disabled";
   state.pendingUserPrompt = false;
+  state.backgroundAgents.clear();
 }
 
 export function formatContextUsage(usage: ContextUsage | undefined): string | undefined {
