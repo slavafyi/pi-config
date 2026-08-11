@@ -9,7 +9,7 @@ import {
   type UsageReport,
 } from "./core.js";
 
-const STATUS_ID = "ai-usage-status";
+const STATUS_ID = "usage-status";
 const TTL_MS = 30_000;
 const CLI_TIMEOUT_MS = 25_000;
 const CODEXBAR_PROVIDERS: Record<string, string> = {
@@ -17,7 +17,7 @@ const CODEXBAR_PROVIDERS: Record<string, string> = {
   cursor: "cursor",
 };
 
-export default function aiUsage(pi: ExtensionAPI) {
+export default function usage(pi: ExtensionAPI) {
   let active = false;
   const cache = new Map<string, { report: UsageReport; fetchedAt: number }>();
   const inFlight = new Map<string, Promise<UsageReport>>();
@@ -79,6 +79,7 @@ export default function aiUsage(pi: ExtensionAPI) {
   }
 
   async function refresh(ctx: ExtensionContext) {
+    if (!ctx.hasUI) return;
     const provider = ctx.model?.provider;
     const modelId = ctx.model?.id ?? "";
     const codexBarProvider = provider ? CODEXBAR_PROVIDERS[provider] : undefined;

@@ -1,7 +1,7 @@
 ---
 description: Independent second opinion on direction and assumptions
 tools: read, grep, find, ls
-extensions: false
+extensions: [usage]
 persist_session: true
 ---
 

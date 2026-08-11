@@ -1,7 +1,7 @@
 ---
 description: Autonomous worker for a narrow, self-contained task
 tools: read, bash, edit, write, grep, find, ls
-extensions: false
+extensions: [usage]
 persist_session: true
 prompt_mode: append
 ---

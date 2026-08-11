@@ -1,7 +1,7 @@
 ---
 description: Independent review of a finished artifact
 tools: read, bash, grep, find, ls
-extensions: false
+extensions: [usage]
 persist_session: true
 ---
 

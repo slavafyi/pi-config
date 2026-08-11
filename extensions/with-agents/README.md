@@ -70,14 +70,16 @@ the configured concurrency limit.
 
 Only three global custom agents are enabled:
 
-| Role | Purpose | Tools |
-| --- | --- | --- |
-| `general` | Autonomous worker for a narrow task | All seven built-in coding tools |
-| `oracle` | Independent second opinion on direction and assumptions | `read`, `grep`, `find`, `ls` |
-| `reviewer` | Independent review of a finished artifact | `read`, `bash`, `grep`, `find`, `ls` |
+| Role       | Purpose                                                 | Tools                                |
+| ---------- | ------------------------------------------------------- | ------------------------------------ |
+| `general`  | Autonomous worker for a narrow task                     | All seven built-in coding tools      |
+| `oracle`   | Independent second opinion on direction and assumptions | `read`, `grep`, `find`, `ls`         |
+| `reviewer` | Independent review of a finished artifact               | `read`, `bash`, `grep`, `find`, `ls` |
 
-All profiles set `persist_session: true` and `extensions: false`, so their tool
-lists are exact built-in allowlists. They do not pin model, thinking,
+All profiles set `persist_session: true` and load only the `usage` extension.
+That extension registers no tools, so their tool lists remain exact built-in
+allowlists. In headless sessions it records Cursor cost estimates without
+starting CodexBar quota requests. The profiles do not pin model, thinking,
 background mode, context inheritance, or filesystem isolation. `reviewer` may
 use `bash` for tests but is instructed not to modify files.
 

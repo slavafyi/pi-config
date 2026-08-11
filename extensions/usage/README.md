@@ -1,4 +1,4 @@
-# AI usage
+# Usage
 
 This Pi extension shows the active Codex or Cursor subscription quota in the
 built-in footer and adds an API-equivalent cost estimate to new Cursor assistant
@@ -32,9 +32,10 @@ Reload Pi after setup:
 
 ## Status
 
-The extension refreshes on startup, model changes, and completed turns. It uses
-a 30-second cache, deduplicates concurrent requests, and keeps the last good
-value through temporary failures.
+The extension refreshes on startup, model changes, and completed turns when a
+UI is available. Headless sessions skip CodexBar quota requests but still add
+Cursor cost estimates. It uses a 30-second cache, deduplicates concurrent
+requests, and keeps the last good value through temporary failures.
 
 ```text
 7d:82% left (↺in 4d22h7m)
