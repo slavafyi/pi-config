@@ -1,4 +1,4 @@
-# AI usage status
+# AI usage
 
 This Pi extension shows the active subscription quota in the built-in footer and
 adds an API-equivalent cost estimate to new Cursor assistant messages.

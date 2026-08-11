@@ -14,7 +14,7 @@ const TTL_MS = 30_000;
 const CLI_TIMEOUT_MS = 25_000;
 const SUPPORTED_PROVIDERS = new Set(["openai-codex", "cursor"]);
 
-export default function aiUsageStatus(pi: ExtensionAPI) {
+export default function aiUsage(pi: ExtensionAPI) {
   let active = false;
   let cached: { report: UsageReport; fetchedAt: number } | undefined;
   let inFlight: Promise<UsageReport> | undefined;
