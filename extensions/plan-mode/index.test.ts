@@ -7,6 +7,7 @@ test("changes modes without changing the provider tool prefix", async () => {
 	const handlers = new Map<string, (event: any, ctx: any) => any>();
 	const commands = new Map<string, (args: string, ctx: any) => Promise<void>>();
 	const setActiveToolsCalls: string[][] = [];
+	const sentMessages: Array<{ message: any; options: any }> = [];
 	const entries: any[] = [];
 	const pi = {
 		on: (event: string, handler: (event: any, ctx: any) => any) => handlers.set(event, handler),
@@ -19,7 +20,7 @@ test("changes modes without changing the provider tool prefix", async () => {
 		registerShortcut: () => {},
 		appendEntry: (customType: string, data: unknown) => entries.push({ type: "custom", customType, data }),
 		setActiveTools: (tools: string[]) => setActiveToolsCalls.push(tools),
-		sendMessage: () => {},
+		sendMessage: (message: any, options: any) => sentMessages.push({ message, options }),
 		sendUserMessage: () => {},
 	};
 	const ctx = {
@@ -77,6 +78,10 @@ test("changes modes without changing the provider tool prefix", async () => {
 	assert.equal(execution.systemPrompt, normal.systemPrompt);
 	assert.equal(execution.message.customType, "plan-execution-context");
 	assert.match(execution.message.content, /Inspect the cache behavior/);
+	assert.equal(sentMessages.length, 1);
+	assert.equal(sentMessages[0].message.customType, "plan-mode-execute");
+	assert.match(sentMessages[0].message.content, /Plan mode has ended\. Execute the plan now\./);
+	assert.deepEqual(sentMessages[0].options, { triggerTurn: true, deliverAs: "followUp" });
 	assert.deepEqual(setActiveToolsCalls, []);
 	assert.equal(handlers.has("context"), false);
 });

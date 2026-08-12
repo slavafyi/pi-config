@@ -258,14 +258,14 @@ After completing a step, include a [DONE:n] tag in your response.`;
 			persistState();
 
 			const remainingList = todoItems.map((t) => `${t.step}. ${t.text}`).join("\n");
-			const execMessage = `Execute the plan.
+			const execMessage = `[EXECUTING PLAN - Full tool access enabled]
+Plan mode has ended. Execute the plan now.
 
 Remaining steps:
 ${remainingList}
 
 Start with: ${firstTodoItem.text}
 After completing a step, include a [DONE:n] tag in your response.`;
-			pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
 			pi.sendMessage(
 				{ customType: "plan-mode-execute", content: execMessage, display: true },
 				{ triggerTurn: true, deliverAs: "followUp" },
