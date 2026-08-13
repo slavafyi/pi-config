@@ -147,18 +147,6 @@ Follow the setup instructions in the repository's root [README](../../README.md)
 Pi loads this extension from `extensions/with-agents/` and the agent profiles
 from `agents/`.
 
-`settings.json` temporarily loads the commit from upstream PR
-[tintinweb/pi-subagents#205](https://github.com/tintinweb/pi-subagents/pull/205):
-
-<!-- TODO: Remove the commit pin after tintinweb/pi-subagents#205 merges. -->
-
-```text
-git:github.com/tintinweb/pi-subagents@09281cef7adc526cefe32b1ff69a0cf3396751ad
-```
-
-The pinned commit is version `0.14.3` plus parent-session lineage for persisted
-subagents. Recheck the package's tool and settings API when removing the pin.
-
 ## Validation
 
 Run the state-machine test:
