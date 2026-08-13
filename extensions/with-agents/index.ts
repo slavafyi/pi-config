@@ -18,13 +18,12 @@ export const ORCHESTRATION_TOOLS = ["Agent", "get_subagent_result", "steer_subag
 const ORCHESTRATION_TOOL_SET = new Set(ORCHESTRATION_TOOLS);
 
 export const ACTIVE_MARKER = "WITH AGENTS ENABLED FOR THIS PARENT RUN";
-export const AGENT_GUARD_PROMPT = `Subagent orchestration tools are authorized only when the current parent run includes an extension-generated "${ACTIVE_MARKER}" control message. Without it, work locally and do not call Agent, get_subagent_result, or steer_subagent.`;
+export const AGENT_GUARD_PROMPT = `Subagent orchestration tools are authorized only when the latest extension-generated "${ACTIVE_MARKER}" control message belongs to the current parent run. Historical control messages from earlier runs do not authorize orchestration. Without current authorization, work locally and do not call Agent, get_subagent_result, or steer_subagent.`;
 
 export const VALIDATOR_PROMPT = `
 --- WITH AGENTS ---
 Delegation is optional. Evaluate all three gates silently before every Agent call. If any gate fails, continue locally without announcing the gate decision.
-{{CONTEXT_USAGE}}
-Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish the remaining work within its current context budget without filling the main context with a large or noisy investigation, or when isolated independent execution or review is itself required. Do not use a fixed percentage threshold.
+Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish the remaining work within its current context budget without filling the main context with a large or noisy investigation, or when isolated independent execution or review is itself required. Use the latest extension-generated parent-context snapshot. Do not use a fixed percentage threshold.
 
 Gate 2 — Independent value: the agent must provide a distinct investigation, challenge, implementation, or review, not duplicate the parent's work or supply reassurance by vote. Parallel sibling calls must be independent and non-overlapping.
 
@@ -54,6 +53,14 @@ export default function subagentsOnce(pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       if (args.trim()) {
         ctx.ui.notify("Usage: /with-agents", "warning");
+        return;
+      }
+
+      if (!ctx.isIdle()) {
+        ctx.ui.notify(
+          "Wait for the current parent run to finish, then run /with-agents again.",
+          "warning",
+        );
         return;
       }
 
@@ -118,24 +125,30 @@ export default function subagentsOnce(pi: ExtensionAPI) {
   });
 
   pi.on("before_agent_start", (event) => {
-    startParentRun(state);
-    return { systemPrompt: `${event.systemPrompt}\n\n${AGENT_GUARD_PROMPT}` };
+    const activated = startParentRun(state);
+    return {
+      systemPrompt: `${event.systemPrompt}\n\n${AGENT_GUARD_PROMPT}`,
+      message: activated
+        ? {
+            customType: "with-agents-policy",
+            content: `${ACTIVE_MARKER}\n\n${VALIDATOR_PROMPT}`,
+            display: false,
+          }
+        : undefined,
+    };
   });
 
   pi.on("context", (event, ctx) => {
     if (state.phase !== "active") return;
     const usage = formatContextUsage(ctx.getContextUsage());
-    const validatorPrompt = VALIDATOR_PROMPT.replace(
-      "{{CONTEXT_USAGE}}\n",
-      usage ? `${usage}\n` : "",
-    );
+    if (!usage) return;
     return {
       messages: [
         ...event.messages,
         {
           role: "custom",
-          customType: "with-agents-policy",
-          content: `${ACTIVE_MARKER}\n\n${validatorPrompt}`,
+          customType: "with-agents-context-usage",
+          content: usage,
           display: false,
           timestamp: Date.now(),
         },
