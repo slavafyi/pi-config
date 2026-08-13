@@ -41,7 +41,7 @@ export default function usage(pi: ExtensionAPI) {
           "--provider",
           provider,
           "--source",
-          "auto",
+          provider === "codex" ? "oauth" : "auto",
           "--format",
           "json",
           "--json-only",
