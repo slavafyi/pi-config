@@ -22,11 +22,13 @@ Run the command before the prompt that may use subagents:
 ```
 
 The command shows a short toast and arms only the next user prompt. It does not
-add a footer status, widget, renderer, or custom runtime. A short, static system
-instruction tells the parent that orchestration requires an extension-generated
-control message. The armed run receives that control message, the validator
-policy, and a context-usage snapshot as a temporary suffix through Pi's
-`context` event. The suffix is not stored in session history.
+add a footer status, widget, renderer, or custom runtime. Run it only while Pi
+is idle; while a parent run is active, the command asks the user to wait and
+retry. A short, static system instruction tells the parent that orchestration
+requires an extension-generated control message. The armed run stores that
+control message and the validator policy once through `before_agent_start`.
+Each provider call receives only the latest context-usage snapshot as a short,
+temporary suffix through Pi's `context` event.
 
 The parent may make zero, one, or several `Agent` calls. Independent sibling
 calls can run in parallel. Outside the authorized run, the extension blocks
@@ -62,11 +64,17 @@ gate fails, it continues locally without announcing the decision:
    artifacts, preserved constraints, and expected output. Use `reviewer` only
    after a concrete artifact exists.
 
-On each provider call in an authorized run, the temporary validator suffix
-receives a context snapshot from `ctx.getContextUsage()`, including used and
-remaining tokens and percentages. Immediately after compaction, Pi may
-temporarily report usage as unknown; the validator says so rather than
-inventing a remainder.
+On each provider call in an authorized run, a temporary context suffix receives
+a snapshot from `ctx.getContextUsage()`, including used and remaining tokens
+and percentages. The stable validator tells the parent to use the latest
+extension-generated snapshot. Immediately after compaction, Pi may temporarily
+report usage as unknown; the snapshot says so rather than inventing a
+remainder.
+
+Keeping the validator before the first assistant response makes the large
+history and policy a stable provider-cache prefix. Only the latest assistant
+response, its tool results, and the short context snapshot form the fresh tail
+on the next request. The exact tail size therefore depends on tool output.
 
 After the gates pass, zero, one, or several calls are allowed. The parent also
 chooses model, thinking, background mode, context inheritance, and isolation
@@ -149,11 +157,18 @@ from `agents/`.
 
 ## Validation
 
-Run the state-machine test:
+Run the state-machine and cache-prefix contract test:
 
 ```bash
 node --experimental-strip-types \
   extensions/with-agents/contract-test.ts
+```
+
+To print the representative fresh-tail size used by the contract test:
+
+```bash
+WITH_AGENTS_CACHE_DIAGNOSTICS=1 \
+  node --experimental-strip-types extensions/with-agents/contract-test.ts
 ```
 
 Check formatting and extension loading:

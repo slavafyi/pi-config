@@ -74,6 +74,8 @@ const handlers = new Map<string, (event: any, ctx: any) => any>();
 const commands = new Map<string, (args: string, ctx: any) => Promise<void>>();
 const notifications: Array<{ message: string; type: string }> = [];
 let activeTools = [...ORCHESTRATION_TOOLS, "read"];
+let idle = true;
+let contextUsage = { tokens: 120_000, contextWindow: 200_000, percent: 60 };
 const pi = {
   on: (event: string, handler: (event: any, ctx: any) => any) => handlers.set(event, handler),
   events: { on: () => {} },
@@ -85,7 +87,8 @@ const pi = {
   getActiveTools: () => activeTools,
 };
 const ctx = {
-  getContextUsage: () => ({ tokens: 120_000, contextWindow: 200_000, percent: 60 }),
+  isIdle: () => idle,
+  getContextUsage: () => contextUsage,
   ui: {
     notify: (message: string, type: string) => notifications.push({ message, type }),
   },
@@ -107,16 +110,43 @@ for (const toolName of ORCHESTRATION_TOOLS) {
 
 await commands.get("with-agents")?.("", ctx);
 handlers.get("input")?.({ source: "interactive" }, ctx);
-handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-const originalMessages = [{ role: "user", content: "task", timestamp: 1 }];
-const activeContext = handlers.get("context")?.({ messages: originalMessages }, ctx);
-assert.equal(originalMessages.length, 1);
-assert.equal(activeContext.messages.length, 2);
-assert.equal(activeContext.messages[1].customType, "with-agents-policy");
-assert.equal(activeContext.messages[1].display, false);
-assert.match(activeContext.messages[1].content, new RegExp(ACTIVE_MARKER));
-assert.match(activeContext.messages[1].content, /Gate 1/);
-assert.match(activeContext.messages[1].content, /120,000\/200,000 tokens used/);
+const activeStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
+assert.equal(activeStart.message.customType, "with-agents-policy");
+assert.equal(activeStart.message.display, false);
+assert.match(activeStart.message.content, new RegExp(ACTIVE_MARKER));
+assert.match(activeStart.message.content, /Gate 1/);
+assert.doesNotMatch(activeStart.message.content, /120,000\/200,000 tokens used/);
+
+const stableMessages = [
+  { role: "user", content: "task", timestamp: 1 },
+  { role: "custom", ...activeStart.message, timestamp: 2 },
+];
+const firstContext = handlers.get("context")?.({ messages: stableMessages }, ctx);
+assert.equal(stableMessages.length, 2);
+assert.equal(firstContext.messages.length, 3);
+assert.equal(firstContext.messages[2].customType, "with-agents-context-usage");
+assert.match(firstContext.messages[2].content, /120,000\/200,000 tokens used/);
+
+contextUsage = { tokens: 130_000, contextWindow: 200_000, percent: 65 };
+const newTail = [
+  { role: "assistant", content: "Calling a tool", timestamp: 3 },
+  { role: "toolResult", content: "A short result", timestamp: 4 },
+];
+const secondContext = handlers.get("context")?.({ messages: [...stableMessages, ...newTail] }, ctx);
+assert.deepEqual(secondContext.messages.slice(0, stableMessages.length), stableMessages);
+assert.deepEqual(secondContext.messages.slice(stableMessages.length, -1), newTail);
+assert.equal(secondContext.messages.at(-1).customType, "with-agents-context-usage");
+assert.match(secondContext.messages.at(-1).content, /130,000\/200,000 tokens used/);
+const freshTail = secondContext.messages.slice(stableMessages.length);
+assert.deepEqual(
+  freshTail.map((message: { role: string }) => message.role),
+  ["assistant", "toolResult", "custom"],
+);
+if (process.env.WITH_AGENTS_CACHE_DIAGNOSTICS) {
+  console.log(
+    `with-agents fresh tail: ${freshTail.length} messages, ${JSON.stringify(freshTail).length} serialized characters`,
+  );
+}
 for (const toolName of ORCHESTRATION_TOOLS) {
   assert.equal(handlers.get("tool_call")?.({ toolName }, ctx), undefined);
 }
@@ -127,6 +157,17 @@ assert.deepEqual(handlers.get("tool_call")?.({ toolName: "Agent" }, ctx), {
   block: true,
   reason: "Run /with-agents before using subagent tools.",
 });
+
+idle = false;
+await commands.get("with-agents")?.("", ctx);
+assert.deepEqual(notifications.at(-1), {
+  message: "Wait for the current parent run to finish, then run /with-agents again.",
+  type: "warning",
+});
+handlers.get("input")?.({ source: "interactive" }, ctx);
+handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
+assert.equal(handlers.get("context")?.({ messages: [] }, ctx), undefined);
+idle = true;
 
 activeTools = ["read"];
 await commands.get("with-agents")?.("", ctx);
