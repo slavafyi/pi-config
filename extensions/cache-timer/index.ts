@@ -93,24 +93,7 @@ export default function cacheTimer(pi: ExtensionAPI) {
     if (value.timestamp + value.windowMs > Date.now()) interval = setInterval(update, 1_000);
   }
 
-  function restore(ctx: ExtensionContext) {
-    reset(ctx);
-    if (!ctx.model || !cacheWindowMs(ctx.model.provider, ctx.model.id)) return;
-
-    const branch = ctx.sessionManager.getBranch();
-    for (let index = branch.length - 1; index >= 0; index--) {
-      const entry = branch[index];
-      if (entry?.type !== "message" || !isSuccessful(entry.message)) continue;
-      const restored = anchor(entry.message.provider, entry.message.model, entry.message.timestamp);
-      if (restored && isCurrent(ctx, restored)) {
-        confirmed = restored;
-        show(ctx, restored);
-      }
-      return;
-    }
-  }
-
-  pi.on("session_start", (_event, ctx) => restore(ctx));
+  pi.on("session_start", (_event, ctx) => reset(ctx));
   pi.on("model_select", (_event, ctx) => reset(ctx));
   pi.on("turn_start", (event, ctx) => {
     if (!ctx.model) return reset(ctx);
@@ -130,7 +113,7 @@ export default function cacheTimer(pi: ExtensionAPI) {
     if (confirmed && isCurrent(ctx, confirmed)) show(ctx, confirmed);
     else hide(ctx);
   });
-  pi.on("session_tree", (event, ctx) => (event.summaryEntry ? reset(ctx) : restore(ctx)));
+  pi.on("session_tree", (_event, ctx) => reset(ctx));
   pi.on("session_compact", (_event, ctx) => reset(ctx));
   pi.on("session_shutdown", (_event, ctx) => reset(ctx));
 }
