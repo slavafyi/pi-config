@@ -26,8 +26,8 @@ test("dims, warns, and expires at the configured thresholds", () => {
   assert.deepEqual(cacheDisplay(0, windowMs, windowMs), { text: "cache expired", tone: "error" });
 });
 
-test("starts optimistically and restores the last successful request after an error", () => {
-  const now = 1_800_000_000_000;
+test("does not restore persisted cache state and keeps the last runtime success after an error", () => {
+  let now = 1_800_000_000_000;
   const originalNow = Date.now;
   Date.now = () => now;
 
@@ -52,11 +52,14 @@ test("starts optimistically and restores the last successful request after an er
   try {
     cacheTimer({ on: (event: string, handler: (event: any, ctx: any) => void) => handlers.set(event, handler) } as any);
     handlers.get("session_start")?.({}, ctx);
-    assert.equal(statuses.at(-1), "dim:cache 4:00");
+    assert.equal(statuses.at(-1), undefined);
 
     handlers.get("turn_start")?.({ timestamp: now }, ctx);
     assert.equal(statuses.at(-1), "dim:cache 5:00");
+    handlers.get("turn_end")?.({ message: { ...previous, timestamp: now } }, ctx);
 
+    now += MINUTE_MS;
+    handlers.get("turn_start")?.({ timestamp: now }, ctx);
     handlers.get("turn_end")?.({ message: { ...previous, stopReason: "error", timestamp: now } }, ctx);
     assert.equal(statuses.at(-1), "dim:cache 4:00");
 

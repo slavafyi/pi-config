@@ -5,7 +5,9 @@ unexpected cache miss after leaving an expensive conversation idle.
 
 The timer is dim while the cache window is healthy, becomes a warning for the
 last 30%, and shows `cache expired` when the window ends. Each model request
-resets it; it keeps ticking while the model streams and while tools run.
+resets it; it keeps ticking while the model streams and while tools run. The
+indicator stays hidden after starting, resuming, reloading, or navigating a
+session until the next request because the restored prompt prefix may differ.
 Expiration means the documented or observed window ended; the provider may
 retain a cache entry longer.
 
