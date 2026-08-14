@@ -1,11 +1,14 @@
 ---
 description: Apply principles for the selected development stage
-argument-hint: "[auto|plan|implement|verify|all]"
+argument-hint: "[plan|implement|verify|all] [task]"
 ---
-Use mode `${1:-auto}` and apply the corresponding principles:
+Request: ${ARGUMENTS:-the current request from the conversation}
 
-- **auto:** Infer the relevant stage or stages from the request and apply only
-  their principles.
+If the request starts with `plan`, `implement`, `verify`, or `all`, use it as
+the mode. Otherwise, infer the mode and treat the entire request as the task.
+If no task remains, use the current request from the conversation. Apply the
+corresponding principles:
+
 - **plan:** Reduce uncertainty quickly. Apply BDUF-lite, KISS, YAGNI, DoR,
   Thin Slice, and Proof First.
 - **implement:** Deliver quickly without chaos. Apply Least Surprise,
