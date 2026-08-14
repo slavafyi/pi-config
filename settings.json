@@ -16,6 +16,7 @@
     "git:github.com/nicobailon/pi-mcp-adapter",
     "git:github.com/tintinweb/pi-subagents",
     "git:github.com/fitchmultz/pi-cursor-sdk",
+    "git:github.com/earendil-works/pi-transcribe",
     "npm:@ogulcancelik/pi-session-recall"
   ],
   "theme": "koda-light/koda-dark",

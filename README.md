@@ -70,6 +70,7 @@ Packages are declared in `settings.json` and managed by Pi.
 | [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter) | MCP server integration |
 | [pi-subagents](https://github.com/tintinweb/pi-subagents) | Parallel subagent orchestration |
 | [pi-cursor-sdk](https://github.com/fitchmultz/pi-cursor-sdk) | Cursor SDK agents inside Pi |
+| [pi-transcribe](https://github.com/earendil-works/pi-transcribe) | Local speech-to-text dictation |
 | [pi-session-recall](https://www.npmjs.com/package/@ogulcancelik/pi-session-recall) | Search across previous sessions |
 
 Pi packages run with full system access. Review third-party package source code
