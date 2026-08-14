@@ -1,8 +1,8 @@
 # Usage
 
-This Pi extension shows the active Codex or Cursor subscription quota in the
-built-in footer and adds an API-equivalent cost estimate to new Cursor assistant
-messages.
+This Pi extension publishes the active Codex or Cursor subscription quota under
+the `usage` status ID and adds an API-equivalent cost estimate to new Cursor
+assistant messages. The custom footer normalizes and displays that status.
 
 ## Setup
 
@@ -41,11 +41,16 @@ UI is available. Headless sessions skip CodexBar quota requests but still add
 Cursor cost estimates. It uses a 30-second cache, deduplicates concurrent
 requests, and keeps the last good value through temporary failures.
 
+The extension publishes values such as:
+
 ```text
 7d:82% left (↺in 4d22h7m)
 auto:99% left (↺in 30d4h)
 api:97% left (↺in 30d4h)
 ```
+
+The custom footer displays the normalized form without `left`, parentheses, or
+`in`, for example `7d:82% ↺4d22h7m`.
 
 OpenAI prefers the weekly Codex window. Cursor shows the active category: Auto
 for Auto/Composer and API for explicitly selected models, falling back to Total
@@ -71,7 +76,7 @@ output, cache, total cost, and per-provider/model breakdowns.
 For new Cursor messages, this extension prices Pi's recorded input, output,
 cache-read, and cache-write tokens and writes the breakdown to
 `message.usage.cost`. Pi persists it in session JSONL and includes it in its
-built-in footer and `/session`.
+custom footer, built-in session accounting, and `/session`.
 
 The dollar value is an API-equivalent estimate independent of Cursor
 subscription usage. Explicit `:fast` aliases use separate Fast rates. `:slow`

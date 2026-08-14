@@ -1,7 +1,14 @@
 {
-  "extends": "@tsconfig/node24/tsconfig.json",
   "compilerOptions": {
-    "strict": true
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2024"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2024",
+    "types": ["node"]
   },
-  "exclude": ["git"]
+  "exclude": ["git", "node_modules"]
 }

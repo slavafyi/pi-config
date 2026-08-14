@@ -9,8 +9,8 @@ import {
   type UsageReport,
 } from "./core.js";
 
-// Pi sorts footer statuses by ID; the prefix keeps usage first.
-const STATUS_ID = "0-usage";
+// The custom footer places known statuses in fixed slots.
+const STATUS_ID = "usage";
 const TTL_MS = 30_000;
 const CLI_TIMEOUT_MS = 25_000;
 const CODEXBAR_PROVIDERS: Record<string, string> = {
