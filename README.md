@@ -60,7 +60,6 @@ Packages are declared in `settings.json` and managed by Pi.
 | Package | Purpose |
 |---------|---------|
 | [pi-wakatime](https://github.com/ttttmr/pi-wakatime) | WakaTime activity tracking |
-| [ponytail](https://github.com/DietrichGebert/ponytail) | Minimal, YAGNI-first implementation guidance |
 | [pi-fff](https://github.com/ShpetimA/pi-fff) | Fast file and content search tools |
 | [pi-web-access](https://github.com/nicobailon/pi-web-access) | Web search and content extraction |
 | [pi-rtk-optimizer](https://github.com/MasuRii/pi-rtk-optimizer) | Command and tool-output optimization |
