@@ -34,7 +34,10 @@ The footer recognizes these fixed status IDs:
 Known values are parsed and placed in fixed slots. The footer preserves the
 canonical ANSI styling supplied by the owned `usage`, `cache-timer`, and
 `plan-mode` extensions whenever their displayed text does not need rewriting.
-This retains dynamic cache and quota colors without duplicating their rules.
+On component invalidation it emits the internal `footer:invalidate` event so
+those extensions can rebuild their strings with the current theme. The footer
+does not duplicate or override their color rules. This retains dynamic cache
+and quota colors without duplicating their rules.
 The cache reset marker is inserted inside the timer's preserved style, so
 `↺0:30` changes color as one unit.
 
