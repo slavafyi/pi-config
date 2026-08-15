@@ -6,5 +6,5 @@
   "disableDefaultAgents": true,
   "fallbackSubagent": "none",
   "fleetView": false,
-  "widgetMode": "all"
+  "widgetMode": "background"
 }

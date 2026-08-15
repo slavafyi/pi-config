@@ -41,9 +41,9 @@ while Tintinweb delivers their completion notifications. It is revoked after
 every tracked background result has been delivered or consumed and the
 resulting parent run reaches `agent_settled`.
 
-Tintinweb shows running agents in its `● Agents` widget. The widget includes
-foreground and background agents, while the below-editor FleetView is disabled
-globally.
+Tintinweb shows running background agents in its `● Agents` widget. Foreground
+agents appear only in the transcript, while the below-editor FleetView is
+disabled globally.
 
 A later `/with-agents` can use `get_subagent_result`, `steer_subagent`, or
 `Agent({ resume: "..." })` with agent IDs that Tintinweb still holds in its
@@ -122,7 +122,7 @@ Global `subagents.json` configures the backend:
   "disableDefaultAgents": true,
   "fallbackSubagent": "none",
   "fleetView": false,
-  "widgetMode": "all"
+  "widgetMode": "background"
 }
 ```
 
