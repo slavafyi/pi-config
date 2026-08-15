@@ -15,15 +15,6 @@ import {
   type SessionEntryLike,
 } from "./core.js";
 
-const THINKING_COLORS = {
-  minimal: "thinkingMinimal",
-  low: "thinkingLow",
-  medium: "thinkingMedium",
-  high: "thinkingHigh",
-  xhigh: "thinkingXhigh",
-  max: "thinkingMax",
-} as const;
-
 function loadConfig() {
   const codingAgentDir = process.env.PI_CODING_AGENT_DIR;
   if (!codingAgentDir) return parseFooterConfig(undefined);
@@ -73,28 +64,13 @@ export default function footer(pi: ExtensionAPI) {
 
       const style = (text: string, role: FooterRole): string => {
         switch (role) {
-          case "project":
-          case "agents":
-          case "quota":
-            return theme.fg("accent", text);
-          case "model": {
-            const level = ctx.thinkingLevel;
-            const color = !level || level === "off" ? "text" : THINKING_COLORS[level];
-            return theme.fg(color, text);
-          }
-          case "mcp":
-          case "context":
-            return theme.fg("muted", text);
           case "plan":
           case "warning":
             return theme.fg("warning", text);
           case "mcp-error":
           case "error":
             return theme.fg("error", text);
-          case "cache":
-            return theme.fg("success", text);
-          case "cost":
-          case "separator":
+          default:
             return theme.fg("dim", text);
         }
       };
@@ -130,7 +106,9 @@ export default function footer(pi: ExtensionAPI) {
               statuses,
               metrics: {
                 quota: statuses.usage,
+                quotaStyled: statuses.usageStyled,
                 cacheTimer: statuses.cacheTimer,
+                cacheTimerStyled: statuses.cacheTimerStyled,
                 cacheHitPercent: stats.cacheHitPercent,
                 context,
                 cost: stats.cost,

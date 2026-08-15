@@ -31,10 +31,15 @@ The footer recognizes these fixed status IDs:
 - `subagents`
 - `plan-mode`
 
-Known values are parsed, normalized, and placed in fixed slots. Their original
-ANSI styling is not reused: the footer applies semantic theme colors after it
-selects a responsive variant. This keeps width calculations stable while
-preserving warning, error, active, and healthy visual states.
+Known values are parsed and placed in fixed slots. The footer preserves the
+canonical ANSI styling supplied by the owned `usage`, `cache-timer`, and
+`plan-mode` extensions whenever their displayed text does not need rewriting.
+This retains dynamic cache and quota colors without duplicating their rules.
+
+MCP and subagent statuses still require footer-side normalization because they
+come from third-party extensions and change shape at narrower widths. Footer-
+owned context metrics use warning and error colors at the same thresholds as
+Pi's built-in footer; the rest of the footer stays dim.
 
 Unknown extension statuses are hidden by default. To show their sanitized
 values on a separate second line, enable the footer-specific setting in
@@ -68,10 +73,9 @@ a new model response.
 The layout selects the first variant that fits the measured terminal width. It
 does not use fixed breakpoints. It progressively rounds metrics, shortens agent,
 MCP, plan, thinking, cache, context, project, and model labels, then removes
-healthy or lower-priority metrics. Semantic colors are applied only after each
-variant is assembled. `visibleWidth()` ignores their ANSI sequences, and a
-final ANSI-safe truncation guarantees that no rendered line exceeds the
-available width.
+healthy or lower-priority metrics. `visibleWidth()` ignores preserved and
+footer-generated ANSI sequences, and a final ANSI-safe truncation guarantees
+that no rendered line exceeds the available width.
 
 Active plan mode, running or queued agents, MCP errors, low-quota reset times,
 and critical context usage have priority over optional details. At extremely

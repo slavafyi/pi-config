@@ -36,7 +36,9 @@ export interface ContextLike {
 
 export interface FooterMetrics {
   quota?: string;
+  quotaStyled?: string;
   cacheTimer?: string;
+  cacheTimerStyled?: string;
   cacheHitPercent?: number;
   context?: ContextLike;
   cost: number;
@@ -44,10 +46,13 @@ export interface FooterMetrics {
 
 export interface KnownStatuses {
   usage?: string;
+  usageStyled?: string;
   cacheTimer?: string;
+  cacheTimerStyled?: string;
   mcp?: string;
   agents?: string;
   plan?: string;
+  planStyled?: string;
   mcpError: boolean;
   agentsActive: boolean;
   planActive: boolean;
@@ -183,15 +188,24 @@ export function normalizePlan(text: string | undefined): {
 }
 
 export function normalizeKnownStatuses(known: ReadonlyMap<string, string>): KnownStatuses {
+  const usageRaw = known.get("usage");
+  const cacheTimerRaw = known.get("cache-timer");
+  const planRaw = known.get("plan-mode");
+  const usage = normalizeUsage(usageRaw);
+  const cacheTimer = normalizeCacheTimer(cacheTimerRaw);
   const mcp = normalizeMcp(known.get("mcp"));
   const agents = normalizeAgents(known.get("subagents"));
-  const plan = normalizePlan(known.get("plan-mode"));
+  const plan = normalizePlan(planRaw);
   return {
-    usage: normalizeUsage(known.get("usage")),
-    cacheTimer: normalizeCacheTimer(known.get("cache-timer")),
+    usage,
+    usageStyled: usage && usageRaw ? sanitizeStatus(usageRaw) : undefined,
+    cacheTimer,
+    cacheTimerStyled:
+      cacheTimer && cacheTimerRaw ? sanitizeStatus(cacheTimerRaw) : undefined,
     mcp: mcp.text,
     agents: agents.text,
     plan: plan.text,
+    planStyled: plan.text && planRaw ? sanitizeStatus(planRaw) : undefined,
     mcpError: mcp.error,
     agentsActive: agents.active,
     planActive: plan.active,
@@ -303,6 +317,7 @@ function formatAgent(text: string, style: VariantState["agentStyle"]): string {
 interface FooterPart {
   text: string;
   role: FooterRole;
+  preserveStyle?: boolean;
 }
 
 function roleForPercent(value: number | null | undefined): FooterRole {
@@ -319,13 +334,24 @@ function roleForQuota(text: string): FooterRole {
   return "quota";
 }
 
+function styleText(text: string, role: FooterRole, input: FooterLayoutInput): string {
+  return input.style ? input.style(text, role) : text;
+}
+
+function preservesText(styled: string | undefined, plain: string): styled is string {
+  return styled !== undefined && stripAnsi(styled) === plain;
+}
+
 function renderParts(
   parts: FooterPart[],
   separator: string,
   input: FooterLayoutInput,
 ): string {
-  const style = input.style ?? ((text: string) => text);
-  return parts.map(({ text, role }) => style(text, role)).join(style(separator, "separator"));
+  return parts
+    .map(({ text, role, preserveStyle }) =>
+      preserveStyle ? text : styleText(text, role, input),
+    )
+    .join(styleText(separator, "separator", input));
 }
 
 function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: string; right: string } {
@@ -358,9 +384,14 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
     left.push({ text: formatAgent(statuses.agents, state.agentStyle), role: "agents" });
   }
   if (statuses.plan) {
+    const text = state.planCompact && statuses.plan === "⏸ plan" ? "⏸" : statuses.plan;
+    const styled = !state.planCompact && preservesText(statuses.planStyled, text)
+      ? statuses.planStyled
+      : undefined;
     left.push({
-      text: state.planCompact && statuses.plan === "⏸ plan" ? "⏸" : statuses.plan,
+      text: styled ?? text,
       role: "plan",
+      preserveStyle: styled !== undefined,
     });
   }
 
@@ -369,22 +400,45 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
     const text = input.metrics.quota.replace(/(\d+(?:\.\d+)?)%/, (value) =>
       formatPercent(Number.parseFloat(value), state.percentDigits),
     );
-    right.push({ text, role: roleForQuota(text) });
+    const styled = preservesText(input.metrics.quotaStyled, text)
+      ? input.metrics.quotaStyled
+      : undefined;
+    right.push({
+      text: styled ?? text,
+      role: roleForQuota(text),
+      preserveStyle: styled !== undefined,
+    });
   }
 
   const timer = input.metrics.cacheTimer;
   const hit = input.metrics.cacheHitPercent;
   if (!state.hideCacheTimer && (timer || hit !== undefined)) {
-    let text: string | undefined;
+    const hitText = hit === undefined
+      ? ""
+      : formatPercent(hit, state.cacheStyle === 0 ? state.percentDigits : 0);
+    let prefix = "";
     if (state.cacheStyle === 0) {
-      const hitText = hit === undefined ? "" : formatPercent(hit, state.percentDigits);
-      text = `cache:${hitText}${timer ? `${hitText ? " " : ""}↺${timer}` : ""}`;
+      prefix = `cache:${hitText}${timer && hitText ? " " : ""}${timer ? "↺" : ""}`;
     } else if (state.cacheStyle === 1) {
-      text = `C:${hit === undefined ? "" : formatPercent(hit, 0)}${timer ? `/${timer}` : ""}`;
+      prefix = `C:${hitText}${timer ? "/" : ""}`;
     } else if (timer) {
-      text = `↺${timer}`;
+      prefix = "↺";
     }
-    if (text) right.push({ text, role: timer === "expired" ? "error" : "cache" });
+
+    if (prefix || timer) {
+      const timerRole = timer === "expired" ? "error" : "cache";
+      const preservedTimer = timer && preservesText(input.metrics.cacheTimerStyled, timer)
+        ? input.metrics.cacheTimerStyled
+        : undefined;
+      const styledTimer = timer
+        ? preservedTimer ?? styleText(timer, timerRole, input)
+        : "";
+      right.push({
+        text: `${styleText(prefix, "cache", input)}${styledTimer}`,
+        role: "cache",
+        preserveStyle: true,
+      });
+    }
   }
 
   const context = input.metrics.context;
@@ -425,7 +479,14 @@ function priorityFallback(input: FooterLayoutInput): string {
     parts.push({ text: input.statuses.mcp, role: "mcp-error" });
   }
   if (input.metrics.quota && /(?:^|:)\s*(?:[0-1]?\d(?:\.\d+)?)%/.test(input.metrics.quota)) {
-    parts.push({ text: input.metrics.quota, role: roleForQuota(input.metrics.quota) });
+    const styled = preservesText(input.metrics.quotaStyled, input.metrics.quota)
+      ? input.metrics.quotaStyled
+      : undefined;
+    parts.push({
+      text: styled ?? input.metrics.quota,
+      role: roleForQuota(input.metrics.quota),
+      preserveStyle: styled !== undefined,
+    });
   }
   if (input.metrics.context && (input.metrics.context.percent ?? 0) >= 80) {
     parts.push({

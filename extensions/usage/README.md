@@ -41,16 +41,17 @@ UI is available. Headless sessions skip CodexBar quota requests but still add
 Cursor cost estimates. It uses a 30-second cache, deduplicates concurrent
 requests, and keeps the last good value through temporary failures.
 
-The extension publishes values such as:
+The extension publishes the compact display form directly:
 
 ```text
-7d:82% left (↺in 4d22h7m)
-auto:99% left (↺in 30d4h)
-api:97% left (↺in 30d4h)
+7d:82% ↺4d22h7m
+auto:99% ↺30d4h
+api:97% ↺30d4h
 ```
 
-The custom footer displays the normalized form without `left`, parentheses, or
-`in`, for example `7d:82% ↺4d22h7m`.
+The window and reset are dim; only the remaining percentage uses the accent
+color. The custom footer preserves those ANSI colors while positioning and
+truncating the status responsively.
 
 OpenAI prefers the weekly Codex window. Cursor shows the active category: Auto
 for Auto/Composer and API for explicitly selected models, falling back to Total

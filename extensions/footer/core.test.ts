@@ -194,6 +194,39 @@ test("keeps tmux branch and compacts model and thinking to a slash form", () => 
   assert.match(lines[0]!, /5\.6\/m/);
 });
 
+test("preserves owned extension colors inside the responsive layout", () => {
+  const quotaStyled =
+    "\x1b[2m7d:\x1b[0m\x1b[36m94%\x1b[0m\x1b[2m ↺5d13h\x1b[0m";
+  const timerStyled = "\x1b[33m4:23\x1b[0m";
+  const planStyled = "\x1b[33m⏸ plan\x1b[0m";
+  const owned = input({
+    statuses: {
+      ...input().statuses,
+      usageStyled: quotaStyled,
+      cacheTimerStyled: timerStyled,
+      planStyled,
+    },
+    metrics: {
+      ...input().metrics,
+      quotaStyled,
+      cacheTimerStyled: timerStyled,
+    },
+    style(text) {
+      return `\x1b[2m${text}\x1b[0m`;
+    },
+  });
+
+  const wide = renderFooter(owned, 180, tools);
+  assert.ok(wide[0]!.includes(quotaStyled));
+  assert.ok(wide[0]!.includes(timerStyled));
+  assert.ok(wide[0]!.includes(planStyled));
+  assertWidths(wide, 180);
+
+  for (const width of [110, 72, 30]) {
+    assertWidths(renderFooter(owned, width, tools), width);
+  }
+});
+
 test("applies semantic colors after responsive selection", () => {
   const roles = new Set<FooterRole>();
   const colored = renderFooter(

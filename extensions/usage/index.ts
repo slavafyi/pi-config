@@ -5,6 +5,7 @@ import {
   patchCursorMessageCost,
   preferredCursorPool,
   selectQuota,
+  styleQuotaStatus,
   type QuotaStatus,
   type UsageReport,
 } from "./core.js";
@@ -66,12 +67,7 @@ export default function usage(pi: ExtensionAPI) {
   }
 
   function styledQuotaStatus(ctx: ExtensionContext, quota: QuotaStatus): string {
-    const theme = ctx.ui.theme;
-    return (
-      theme.fg("dim", `${quota.window}:`) +
-      theme.fg("accent", `${quota.leftPercent}% left`) +
-      (quota.reset ? theme.fg("dim", ` (↺${quota.reset})`) : "")
-    );
+    return styleQuotaStatus(quota, (tone, text) => ctx.ui.theme.fg(tone, text));
   }
 
   function showUnavailable(ctx: ExtensionContext, provider: string) {
