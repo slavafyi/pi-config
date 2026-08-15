@@ -408,7 +408,7 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
     if (state.modelCompact) {
       text = `${compactModel(input.model)}${initial ? `/${initial}` : ""}`;
     } else if (input.thinking && input.thinking !== "off") {
-      text = `${input.model} • ${state.thinkingCompact ? initial : input.thinking}`;
+      text = `${input.model}/${state.thinkingCompact ? initial : input.thinking}`;
     }
     left.push({ text, role: "model" });
   }
@@ -500,7 +500,7 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
   }
   return {
     left: renderParts(left, "  ", input),
-    right: renderParts(right, " • ", input),
+    right: renderParts(right, "  ", input),
   };
 }
 

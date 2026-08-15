@@ -212,8 +212,8 @@ test("calculates full cost and the latest assistant cache hit", () => {
 
 test("renders wide, compact, narrow, and minimal layouts by measured width", () => {
   const wide = renderFooter(input(), 180, tools);
-  assert.match(wide[0]!, /^pi-config:main  gpt-5\.6-sol:fast • medium  MCP:0\/2  agents:2  ⏸ plan\s+/);
-  assert.ok(wide[0]!.endsWith("7d:94% ↺5d13h • cache:98.1% ↺4:23 • ctx:12%/272k • $1.134"));
+  assert.match(wide[0]!, /^pi-config:main  gpt-5\.6-sol:fast\/medium  MCP:0\/2  agents:2  ⏸ plan\s+/);
+  assert.ok(wide[0]!.endsWith("7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134"));
 
   const compact = renderFooter(input(), 110, tools);
   assert.match(compact[0]!, /A(?::)?2/);
