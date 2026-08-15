@@ -31,9 +31,23 @@ The footer recognizes these fixed status IDs:
 - `subagents`
 - `plan-mode`
 
-Known values are normalized and placed in fixed slots. Other extension statuses
-are sanitized and shown on a separate second line, separated by two spaces.
-The second line is absent when there are no unknown statuses.
+Known values are parsed, normalized, and placed in fixed slots. Their original
+ANSI styling is not reused: the footer applies semantic theme colors after it
+selects a responsive variant. This keeps width calculations stable while
+preserving warning, error, active, and healthy visual states.
+
+Unknown extension statuses are hidden by default. To show their sanitized
+values on a separate second line, enable the footer-specific setting in
+`$PI_CODING_AGENT_DIR/footer.json` and run `/reload`:
+
+```json
+{
+  "showUnknownStatuses": true
+}
+```
+
+When enabled, unknown statuses are separated by two spaces. The second line is
+absent when there are no unknown statuses.
 
 ## Session metrics
 
@@ -54,8 +68,10 @@ a new model response.
 The layout selects the first variant that fits the measured terminal width. It
 does not use fixed breakpoints. It progressively rounds metrics, shortens agent,
 MCP, plan, thinking, cache, context, project, and model labels, then removes
-healthy or lower-priority metrics. A final ANSI-safe truncation guarantees that
-no rendered line exceeds the available width.
+healthy or lower-priority metrics. Semantic colors are applied only after each
+variant is assembled. `visibleWidth()` ignores their ANSI sequences, and a
+final ANSI-safe truncation guarantees that no rendered line exceeds the
+available width.
 
 Active plan mode, running or queued agents, MCP errors, low-quota reset times,
 and critical context usage have priority over optional details. At extremely

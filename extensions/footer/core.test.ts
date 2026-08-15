@@ -4,6 +4,7 @@ import {
   calculateSessionStats,
   classifyStatuses,
   normalizeKnownStatuses,
+  parseFooterConfig,
   projectLabel,
   projectName,
   renderFooter,
@@ -11,6 +12,7 @@ import {
   stripAnsi,
   subscribeToBranchChanges,
   type FooterLayoutInput,
+  type FooterRole,
   type WidthTools,
 } from "./core.ts";
 
@@ -125,10 +127,28 @@ test("sanitizes unknown statuses and emits only a non-empty second line", () => 
     ["other", "one\n\ttwo"],
     ["empty", "\n\t"],
   ]));
-  const lines = renderFooter(input({ unknown: classified.unknown }), 180, tools);
+  const hidden = renderFooter(input({ unknown: classified.unknown }), 180, tools);
+  assert.equal(hidden.length, 1);
+
+  const lines = renderFooter(
+    input({ unknown: classified.unknown, showUnknownStatuses: true }),
+    180,
+    tools,
+  );
   assert.equal(lines.length, 2);
   assert.equal(lines[1], "one two");
   assert.equal(renderFooter(input(), 180, tools).length, 1);
+});
+
+test("defaults unknown extension statuses off and parses an explicit opt-in", () => {
+  assert.deepEqual(parseFooterConfig(undefined), { showUnknownStatuses: false });
+  assert.deepEqual(parseFooterConfig({}), { showUnknownStatuses: false });
+  assert.deepEqual(parseFooterConfig({ showUnknownStatuses: "yes" }), {
+    showUnknownStatuses: false,
+  });
+  assert.deepEqual(parseFooterConfig({ showUnknownStatuses: true }), {
+    showUnknownStatuses: true,
+  });
 });
 
 test("calculates full cost and the latest assistant cache hit", () => {
@@ -174,8 +194,32 @@ test("keeps tmux branch and compacts model and thinking to a slash form", () => 
   assert.match(lines[0]!, /5\.6\/m/);
 });
 
+test("applies semantic colors after responsive selection", () => {
+  const roles = new Set<FooterRole>();
+  const colored = renderFooter(
+    input({
+      style(text, role) {
+        roles.add(role);
+        return `\x1b[36m${text}\x1b[0m`;
+      },
+    }),
+    180,
+    tools,
+  );
+  const plain = renderFooter(input(), 180, tools);
+  assert.match(colored[0]!, /\x1b\[36m/);
+  assert.equal(stripAnsi(colored[0]!), plain[0]);
+  for (const role of ["project", "model", "mcp", "agents", "plan", "quota", "cache", "context", "cost"] as const) {
+    assert.ok(roles.has(role), `missing semantic role: ${role}`);
+  }
+  assertWidths(colored, 180);
+});
+
 test("handles ANSI and Unicode without exceeding any requested width", () => {
-  const decorated = input({ unknown: ["\x1b[31m警告 🚨 status\x1b[0m"] });
+  const decorated = input({
+    unknown: ["\x1b[31m警告 🚨 status\x1b[0m"],
+    showUnknownStatuses: true,
+  });
   for (const width of [1, 2, 5, 12, 30, 80, 160]) {
     const lines = renderFooter(decorated, width, tools);
     assertWidths(lines, width);

@@ -1,16 +1,40 @@
-import { basename } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
   calculateSessionStats,
   classifyStatuses,
   normalizeKnownStatuses,
+  parseFooterConfig,
   projectName,
   renderFooter,
   subscribeToBranchChanges,
   type ContextLike,
+  type FooterRole,
   type SessionEntryLike,
 } from "./core.js";
+
+const THINKING_COLORS = {
+  minimal: "thinkingMinimal",
+  low: "thinkingLow",
+  medium: "thinkingMedium",
+  high: "thinkingHigh",
+  xhigh: "thinkingXhigh",
+  max: "thinkingMax",
+} as const;
+
+function loadConfig() {
+  const codingAgentDir = process.env.PI_CODING_AGENT_DIR;
+  if (!codingAgentDir) return parseFooterConfig(undefined);
+  try {
+    return parseFooterConfig(
+      JSON.parse(readFileSync(join(codingAgentDir, "footer.json"), "utf8")),
+    );
+  } catch {
+    return parseFooterConfig(undefined);
+  }
+}
 
 export default function footer(pi: ExtensionAPI) {
   let generation = 0;
@@ -35,6 +59,7 @@ export default function footer(pi: ExtensionAPI) {
     const inGit = gitRoot.code === 0 && Boolean(gitRoot.stdout.trim());
     const project = inGit ? projectName(gitRoot.stdout, ctx.cwd) : basename(ctx.cwd);
     const inTmux = Boolean(process.env.TMUX);
+    const config = loadConfig();
 
     ctx.ui.setFooter((tui, theme, footerData) => {
       let disposed = false;
@@ -45,6 +70,34 @@ export default function footer(pi: ExtensionAPI) {
         unsubscribe();
       };
       cleanup = componentCleanup;
+
+      const style = (text: string, role: FooterRole): string => {
+        switch (role) {
+          case "project":
+          case "agents":
+          case "quota":
+            return theme.fg("accent", text);
+          case "model": {
+            const level = ctx.thinkingLevel;
+            const color = !level || level === "off" ? "text" : THINKING_COLORS[level];
+            return theme.fg(color, text);
+          }
+          case "mcp":
+          case "context":
+            return theme.fg("muted", text);
+          case "plan":
+          case "warning":
+            return theme.fg("warning", text);
+          case "mcp-error":
+          case "error":
+            return theme.fg("error", text);
+          case "cache":
+            return theme.fg("success", text);
+          case "cost":
+          case "separator":
+            return theme.fg("dim", text);
+        }
+      };
 
       return {
         dispose: componentCleanup,
@@ -83,13 +136,13 @@ export default function footer(pi: ExtensionAPI) {
                 cost: stats.cost,
               },
               unknown: classified.unknown,
+              showUnknownStatuses: config.showUnknownStatuses,
+              style,
             },
             width,
             { visibleWidth, truncateToWidth },
           );
-          return lines.map((line) =>
-            truncateToWidth(theme.fg("dim", line), width, ""),
-          );
+          return lines;
         },
       };
     });

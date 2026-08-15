@@ -58,6 +58,25 @@ export interface ClassifiedStatuses {
   unknown: string[];
 }
 
+export type FooterRole =
+  | "project"
+  | "model"
+  | "mcp"
+  | "mcp-error"
+  | "agents"
+  | "plan"
+  | "quota"
+  | "warning"
+  | "error"
+  | "cache"
+  | "context"
+  | "cost"
+  | "separator";
+
+export interface FooterConfig {
+  showUnknownStatuses: boolean;
+}
+
 export interface FooterLayoutInput {
   project?: string;
   branch?: string | null;
@@ -68,6 +87,18 @@ export interface FooterLayoutInput {
   statuses: KnownStatuses;
   metrics: FooterMetrics;
   unknown: string[];
+  showUnknownStatuses?: boolean;
+  style?: (text: string, role: FooterRole) => string;
+}
+
+export function parseFooterConfig(value: unknown): FooterConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { showUnknownStatuses: false };
+  }
+  return {
+    showUnknownStatuses:
+      (value as { showUnknownStatuses?: unknown }).showUnknownStatuses === true,
+  };
 }
 
 export function stripAnsi(text: string): string {
@@ -269,61 +300,108 @@ function formatAgent(text: string, style: VariantState["agentStyle"]): string {
   return style === 1 ? `A:${value}` : `A${value}`;
 }
 
+interface FooterPart {
+  text: string;
+  role: FooterRole;
+}
+
+function roleForPercent(value: number | null | undefined): FooterRole {
+  if (value === null || value === undefined) return "context";
+  if (value > 90) return "error";
+  if (value > 70) return "warning";
+  return "context";
+}
+
+function roleForQuota(text: string): FooterRole {
+  const percent = Number.parseFloat(text.match(/(\d+(?:\.\d+)?)%/)?.[1] ?? "100");
+  if (percent <= 10) return "error";
+  if (percent <= 25) return "warning";
+  return "quota";
+}
+
+function renderParts(
+  parts: FooterPart[],
+  separator: string,
+  input: FooterLayoutInput,
+): string {
+  const style = input.style ?? ((text: string) => text);
+  return parts.map(({ text, role }) => style(text, role)).join(style(separator, "separator"));
+}
+
 function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: string; right: string } {
-  const left: string[] = [];
+  const left: FooterPart[] = [];
   let label = projectLabel(input);
   if (state.branchOnly && input.inGit) label = input.branch || "detached";
-  if (label) left.push(label);
+  if (label) left.push({ text: label, role: "project" });
 
   const initial = thinkingInitial(input.thinking);
   if (input.model) {
+    let text = input.model;
     if (state.modelCompact) {
-      left.push(`${compactModel(input.model)}${initial ? `/${initial}` : ""}`);
+      text = `${compactModel(input.model)}${initial ? `/${initial}` : ""}`;
     } else if (input.thinking && input.thinking !== "off") {
-      left.push(`${input.model} • ${state.thinkingCompact ? initial : input.thinking}`);
-    } else {
-      left.push(input.model);
+      text = `${input.model} • ${state.thinkingCompact ? initial : input.thinking}`;
     }
+    left.push({ text, role: "model" });
   }
 
   const statuses = input.statuses;
   if (statuses.mcp && !(state.hideHealthyMcp && !statuses.mcpError)) {
-    left.push(state.mcpCompact && !statuses.mcpError ? statuses.mcp.replace(/^MCP:/, "M:") : statuses.mcp);
+    left.push({
+      text: state.mcpCompact && !statuses.mcpError
+        ? statuses.mcp.replace(/^MCP:/, "M:")
+        : statuses.mcp,
+      role: statuses.mcpError ? "mcp-error" : "mcp",
+    });
   }
-  if (statuses.agents) left.push(formatAgent(statuses.agents, state.agentStyle));
-  if (statuses.plan) left.push(state.planCompact && statuses.plan === "⏸ plan" ? "⏸" : statuses.plan);
+  if (statuses.agents) {
+    left.push({ text: formatAgent(statuses.agents, state.agentStyle), role: "agents" });
+  }
+  if (statuses.plan) {
+    left.push({
+      text: state.planCompact && statuses.plan === "⏸ plan" ? "⏸" : statuses.plan,
+      role: "plan",
+    });
+  }
 
-  const right: string[] = [];
+  const right: FooterPart[] = [];
   if (input.metrics.quota) {
-    right.push(
-      input.metrics.quota.replace(/(\d+(?:\.\d+)?)%/, (value) =>
-        formatPercent(Number.parseFloat(value), state.percentDigits),
-      ),
+    const text = input.metrics.quota.replace(/(\d+(?:\.\d+)?)%/, (value) =>
+      formatPercent(Number.parseFloat(value), state.percentDigits),
     );
+    right.push({ text, role: roleForQuota(text) });
   }
 
   const timer = input.metrics.cacheTimer;
   const hit = input.metrics.cacheHitPercent;
   if (!state.hideCacheTimer && (timer || hit !== undefined)) {
+    let text: string | undefined;
     if (state.cacheStyle === 0) {
       const hitText = hit === undefined ? "" : formatPercent(hit, state.percentDigits);
-      right.push(`cache:${hitText}${timer ? `${hitText ? " " : ""}↺${timer}` : ""}`);
+      text = `cache:${hitText}${timer ? `${hitText ? " " : ""}↺${timer}` : ""}`;
     } else if (state.cacheStyle === 1) {
-      right.push(`C:${hit === undefined ? "" : formatPercent(hit, 0)}${timer ? `/${timer}` : ""}`);
+      text = `C:${hit === undefined ? "" : formatPercent(hit, 0)}${timer ? `/${timer}` : ""}`;
     } else if (timer) {
-      right.push(`↺${timer}`);
+      text = `↺${timer}`;
     }
+    if (text) right.push({ text, role: timer === "expired" ? "error" : "cache" });
   }
 
   const context = input.metrics.context;
   if (context) {
     const percent = context.percent === null ? "?" : formatPercent(context.percent, state.percentDigits);
-    if (state.contextStyle === 0) right.push(`ctx:${percent}/${formatTokens(context.contextWindow)}`);
-    else if (state.contextStyle === 1) right.push(`ctx:${percent}`);
-    else right.push(percent);
+    let text = percent;
+    if (state.contextStyle === 0) text = `ctx:${percent}/${formatTokens(context.contextWindow)}`;
+    else if (state.contextStyle === 1) text = `ctx:${percent}`;
+    right.push({ text, role: roleForPercent(context.percent) });
   }
-  if (!state.hideCost && input.metrics.cost > 0) right.push(`$${input.metrics.cost.toFixed(state.costDigits)}`);
-  return { left: left.join("  "), right: right.join(" • ") };
+  if (!state.hideCost && input.metrics.cost > 0) {
+    right.push({ text: `$${input.metrics.cost.toFixed(state.costDigits)}`, role: "cost" });
+  }
+  return {
+    left: renderParts(left, "  ", input),
+    right: renderParts(right, " • ", input),
+  };
 }
 
 function fitLine(left: string, right: string, width: number, tools: WidthTools): string | undefined {
@@ -336,15 +414,26 @@ function fitLine(left: string, right: string, width: number, tools: WidthTools):
 }
 
 function priorityFallback(input: FooterLayoutInput): string {
-  const parts: string[] = [];
-  if (input.statuses.planActive && input.statuses.plan) parts.push(input.statuses.plan);
-  if (input.statuses.agentsActive && input.statuses.agents) parts.push(input.statuses.agents);
-  if (input.statuses.mcpError && input.statuses.mcp) parts.push(input.statuses.mcp);
-  if (input.metrics.quota && /(?:^|:)\s*(?:[0-1]?\d(?:\.\d+)?)%/.test(input.metrics.quota)) parts.push(input.metrics.quota);
-  if (input.metrics.context && (input.metrics.context.percent ?? 0) >= 80) {
-    parts.push(`ctx:${formatPercent(input.metrics.context.percent!, 0)}`);
+  const parts: FooterPart[] = [];
+  if (input.statuses.planActive && input.statuses.plan) {
+    parts.push({ text: input.statuses.plan, role: "plan" });
   }
-  return parts.join("  ");
+  if (input.statuses.agentsActive && input.statuses.agents) {
+    parts.push({ text: input.statuses.agents, role: "agents" });
+  }
+  if (input.statuses.mcpError && input.statuses.mcp) {
+    parts.push({ text: input.statuses.mcp, role: "mcp-error" });
+  }
+  if (input.metrics.quota && /(?:^|:)\s*(?:[0-1]?\d(?:\.\d+)?)%/.test(input.metrics.quota)) {
+    parts.push({ text: input.metrics.quota, role: roleForQuota(input.metrics.quota) });
+  }
+  if (input.metrics.context && (input.metrics.context.percent ?? 0) >= 80) {
+    parts.push({
+      text: `ctx:${formatPercent(input.metrics.context.percent!, 0)}`,
+      role: roleForPercent(input.metrics.context.percent),
+    });
+  }
+  return renderParts(parts, "  ", input);
 }
 
 export function renderFooter(
@@ -405,7 +494,9 @@ export function renderFooter(
   }
 
   const lines = [tools.truncateToWidth(first, width, "")];
-  const unknown = input.unknown.filter(Boolean).join("  ");
+  const unknown = input.showUnknownStatuses
+    ? input.unknown.filter(Boolean).join("  ")
+    : "";
   if (unknown) lines.push(tools.truncateToWidth(unknown, width, ""));
   return lines;
 }
