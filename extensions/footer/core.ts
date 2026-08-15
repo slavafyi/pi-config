@@ -51,6 +51,8 @@ export interface KnownStatuses {
   cacheTimerStyled?: string;
   mcp?: string;
   agents?: string;
+  agentsRunning?: number;
+  agentsQueued?: number;
   plan?: string;
   planStyled?: string;
   mcpError: boolean;
@@ -69,6 +71,8 @@ export type FooterRole =
   | "mcp"
   | "mcp-error"
   | "agents"
+  | "agent-running"
+  | "agent-queued"
   | "plan"
   | "quota"
   | "warning"
@@ -168,16 +172,22 @@ export function normalizeMcp(text: string | undefined): { text?: string; error: 
 
 export function normalizeAgents(text: string | undefined): {
   text?: string;
+  running?: number;
+  queued?: number;
   active: boolean;
 } {
   if (!text) return { active: false };
   const clean = plainStatus(text);
-  const running = Number(clean.match(/(\d+)\s+running\s+agents?/i)?.[1] ?? 0);
-  const queued = Number(clean.match(/(\d+)\s+queued/i)?.[1] ?? 0);
-  if (running || queued) {
+  const runningMatch = clean.match(/(?:^|,\s*)(\d+)\s+running(?:\s+agents?)?(?=,|$)/i);
+  const queuedMatch = clean.match(/(?:^|,\s*)(\d+)\s+queued(?:\s+agents?)?(?=,|$)/i);
+  if (runningMatch || queuedMatch) {
+    const running = Number(runningMatch?.[1] ?? 0);
+    const queued = Number(queuedMatch?.[1] ?? 0);
     return {
       text: `agents:${running}${queued ? `+${queued}q` : ""}`,
-      active: true,
+      running,
+      queued,
+      active: running > 0 || queued > 0,
     };
   }
   return { text: clean || undefined, active: Boolean(clean) };
@@ -210,6 +220,8 @@ export function normalizeKnownStatuses(known: ReadonlyMap<string, string>): Know
       cacheTimer && cacheTimerRaw ? sanitizeStatus(cacheTimerRaw) : undefined,
     mcp: mcp.text,
     agents: agents.text,
+    agentsRunning: agents.running,
+    agentsQueued: agents.queued,
     plan: plan.text,
     planStyled: plan.text && planRaw ? sanitizeStatus(planRaw) : undefined,
     mcpError: mcp.error,
@@ -320,6 +332,30 @@ function formatAgent(text: string, style: VariantState["agentStyle"]): string {
   return style === 1 ? `A:${value}` : `A${value}`;
 }
 
+function renderAgentPart(
+  statuses: KnownStatuses,
+  style: VariantState["agentStyle"],
+  input: FooterLayoutInput,
+): FooterPart | undefined {
+  if (!statuses.agents) return undefined;
+  if (statuses.agentsRunning === undefined || statuses.agentsQueued === undefined) {
+    return { text: formatAgent(statuses.agents, style), role: "agents" };
+  }
+
+  const prefix = style === 0 ? "agents:" : style === 1 ? "A:" : "A";
+  const queued = statuses.agentsQueued > 0
+    ? styleText(`+${statuses.agentsQueued}q`, "agent-queued", input)
+    : "";
+  return {
+    text:
+      styleText(prefix, "separator", input) +
+      styleText(String(statuses.agentsRunning), "agent-running", input) +
+      queued,
+    role: "agents",
+    preserveStyle: true,
+  };
+}
+
 interface FooterPart {
   text: string;
   role: FooterRole;
@@ -386,9 +422,8 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
       role: statuses.mcpError ? "mcp-error" : "mcp",
     });
   }
-  if (statuses.agents) {
-    left.push({ text: formatAgent(statuses.agents, state.agentStyle), role: "agents" });
-  }
+  const agentPart = renderAgentPart(statuses, state.agentStyle, input);
+  if (agentPart) left.push(agentPart);
   if (statuses.plan) {
     const text = state.planCompact && statuses.plan === "⏸ plan" ? "⏸" : statuses.plan;
     const styled = !state.planCompact && preservesText(statuses.planStyled, text)
@@ -483,8 +518,9 @@ function priorityFallback(input: FooterLayoutInput): string {
   if (input.statuses.planActive && input.statuses.plan) {
     parts.push({ text: input.statuses.plan, role: "plan" });
   }
-  if (input.statuses.agentsActive && input.statuses.agents) {
-    parts.push({ text: input.statuses.agents, role: "agents" });
+  if (input.statuses.agentsActive) {
+    const agentPart = renderAgentPart(input.statuses, 0, input);
+    if (agentPart) parts.push(agentPart);
   }
   if (input.statuses.mcpError && input.statuses.mcp) {
     parts.push({ text: input.statuses.mcp, role: "mcp-error" });

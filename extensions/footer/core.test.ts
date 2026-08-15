@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   calculateSessionStats,
   classifyStatuses,
+  normalizeAgents,
   normalizeKnownStatuses,
   parseFooterConfig,
   prefixStyledText,
@@ -122,6 +123,32 @@ test("classifies fixed status slots independently of Map order", () => {
   assert.equal(known.plan, "⏸ plan");
 });
 
+test("parses every footer status shape emitted by pi-subagents", () => {
+  const cases = [
+    ["1 running agent", "agents:1", 1, 0],
+    ["2 running agents", "agents:2", 2, 0],
+    ["1 queued agent", "agents:0+1q", 0, 1],
+    ["2 queued agents", "agents:0+2q", 0, 2],
+    ["1 running, 1 queued agents", "agents:1+1q", 1, 1],
+    ["2 running, 1 queued agents", "agents:2+1q", 2, 1],
+    ["1 running, 2 queued agents", "agents:1+2q", 1, 2],
+  ] as const;
+
+  for (const [raw, text, running, queued] of cases) {
+    assert.deepEqual(normalizeAgents(raw), {
+      text,
+      running,
+      queued,
+      active: true,
+    });
+  }
+  assert.deepEqual(normalizeAgents(undefined), { active: false });
+  assert.deepEqual(normalizeAgents("agent manager error"), {
+    text: "agent manager error",
+    active: true,
+  });
+});
+
 test("sanitizes unknown statuses and emits only a non-empty second line", () => {
   assert.equal(sanitizeStatus(" one\n\ttwo\r three "), "one two three");
   const classified = classifyStatuses(new Map([
@@ -237,6 +264,30 @@ test("preserves owned extension colors inside the responsive layout", () => {
 
   for (const width of [110, 72, 30]) {
     assertWidths(renderFooter(owned, width, tools), width);
+  }
+});
+
+test("colors running and queued agent counts independently", () => {
+  const colored = input({
+    statuses: {
+      ...input().statuses,
+      agents: "agents:2+1q",
+      agentsRunning: 2,
+      agentsQueued: 1,
+    },
+    style(text, role) {
+      const color = role === "agent-running" ? 36 : role === "agent-queued" ? 33 : 2;
+      return `\x1b[${color}m${text}\x1b[0m`;
+    },
+  });
+  const wide = renderFooter(colored, 180, tools);
+  assert.ok(
+    wide[0]!.includes(
+      "\x1b[2magents:\x1b[0m\x1b[36m2\x1b[0m\x1b[33m+1q\x1b[0m",
+    ),
+  );
+  for (const width of [180, 110, 72, 30]) {
+    assertWidths(renderFooter(colored, width, tools), width);
   }
 });
 

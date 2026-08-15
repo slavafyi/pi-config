@@ -39,9 +39,11 @@ The cache reset marker is inserted inside the timer's preserved style, so
 `↺0:30` changes color as one unit.
 
 MCP and subagent statuses still require footer-side normalization because they
-come from third-party extensions and change shape at narrower widths. Footer-
-owned context metrics use warning and error colors at the same thresholds as
-Pi's built-in footer; the rest of the footer stays dim.
+come from third-party extensions and change shape at narrower widths. For
+subagents, the label stays dim, the running count uses accent, and the queued
+suffix uses warning in all responsive forms (`agents:2+1q`, `A:2+1q`, or
+`A2+1q`). Footer-owned context metrics use warning and error colors at the same
+thresholds as Pi's built-in footer; the rest of the footer stays dim.
 
 Unknown extension statuses are hidden by default. To show their sanitized
 values on a separate second line, enable the footer-specific setting in

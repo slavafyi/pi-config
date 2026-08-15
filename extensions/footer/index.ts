@@ -64,6 +64,9 @@ export default function footer(pi: ExtensionAPI) {
 
       const style = (text: string, role: FooterRole): string => {
         switch (role) {
+          case "agent-running":
+            return theme.fg("accent", text);
+          case "agent-queued":
           case "plan":
           case "warning":
             return theme.fg("warning", text);
