@@ -1,11 +1,13 @@
 # Cache timer
 
-Shows the remaining prompt-cache window in Pi's footer. This helps avoid an
+Publishes the remaining prompt-cache window under the `cache-timer` status ID.
+The custom footer adds the `cache:` label and reset symbol. This helps avoid an
 unexpected cache miss after leaving an expensive conversation idle.
 
-The timer is dim while the cache window is healthy, becomes a warning for the
-last 30%, and shows `cache expired` when the window ends. Each model request
-resets it; it keeps ticking while the model streams and while tools run. The
+The extension publishes `4:23` while active or `expired` when the window ends.
+The timer is dim while the cache window is healthy and becomes a warning for
+the last 30%. Each model request resets it; it keeps ticking while the model
+streams and while tools run. The
 indicator stays hidden after starting, resuming, reloading, or navigating a
 session until the next request because the restored prompt prefix may differ.
 Expiration means the documented or observed window ended; the provider may

@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, TurnEndEvent } from "@earendil-works/pi-coding-agent";
 
-const STATUS_ID = "1-cache-timer";
+const STATUS_ID = "cache-timer";
 const MINUTE_MS = 60_000;
 const WARNING_RATIO = 0.3;
 
@@ -23,13 +23,13 @@ export function cacheWindowMs(provider: string, model: string): number | undefin
 
 export function cacheDisplay(lastRequestAt: number, windowMs: number, now = Date.now()): CacheDisplay {
   const remainingMs = lastRequestAt + windowMs - now;
-  if (remainingMs <= 0) return { text: "cache expired", tone: "error" };
+  if (remainingMs <= 0) return { text: "expired", tone: "error" };
 
   const totalSeconds = Math.ceil(remainingMs / 1_000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return {
-    text: `cache ${minutes}:${seconds.toString().padStart(2, "0")}`,
+    text: `${minutes}:${seconds.toString().padStart(2, "0")}`,
     tone: remainingMs <= windowMs * WARNING_RATIO ? "warning" : "dim",
   };
 }

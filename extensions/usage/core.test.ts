@@ -8,9 +8,11 @@ import {
   normalizeCursorModelId,
   parseUsageReport,
   patchCursorMessageCost,
+  quotaPercentTone,
   selectCursorQuota,
   selectOpenAiQuota,
   selectQuota,
+  styleQuotaStatus,
   type UsageEntry,
 } from "./core.ts";
 
@@ -57,24 +59,48 @@ test("parses the supported CodexBar usage shape strictly", () => {
 
 const now = new Date("2026-08-11T10:00:00Z");
 
-test("uses the useful OpenAI weekly window and reports percent left", () => {
+test("uses the useful OpenAI weekly window and accents only percent left", () => {
   const quota = selectOpenAiQuota(entry("codex"), now);
   assert.ok(quota);
   assert.equal(quota.usedPercent, 18);
-  assert.equal(formatQuotaStatus(quota), "7d:82% left (↺in 4d22h7m)");
+  assert.equal(formatQuotaStatus(quota), "7d:82% ↺4d22h7m");
+
+  const parts: Array<[string, string]> = [];
+  const styled = styleQuotaStatus(quota, (tone, text) => {
+    parts.push([tone, text]);
+    return `<${tone}>${text}</${tone}>`;
+  });
+  assert.deepEqual(parts, [
+    ["dim", "7d:"],
+    ["accent", "82%"],
+    ["dim", " ↺4d22h7m"],
+  ]);
+  assert.equal(
+    styled,
+    "<dim>7d:</dim><accent>82%</accent><dim> ↺4d22h7m</dim>",
+  );
+});
+
+test("changes quota percent tone at warning and error thresholds", () => {
+  assert.equal(quotaPercentTone(100), "accent");
+  assert.equal(quotaPercentTone(26), "accent");
+  assert.equal(quotaPercentTone(25), "warning");
+  assert.equal(quotaPercentTone(11), "warning");
+  assert.equal(quotaPercentTone(10), "error");
+  assert.equal(quotaPercentTone(0), "error");
 });
 
 test("selects the active Cursor pool without combining pools", () => {
   const composer = selectCursorQuota(entry("cursor"), "composer-2.5:fast", now);
   assert.ok(composer);
   assert.equal(composer.pool, "auto");
-  assert.equal(formatQuotaStatus(composer), "auto:80% left (↺in 9d4h)");
+  assert.equal(formatQuotaStatus(composer), "auto:80% ↺9d4h");
 
   const gpt = selectCursorQuota(entry("cursor"), "gpt-5.6-sol@1m:slow", now);
   assert.ok(gpt);
   assert.equal(gpt.pool, "api");
   assert.equal(gpt.usedPercent, 55);
-  assert.equal(formatQuotaStatus(gpt), "api:45% left (↺in 9d4h)");
+  assert.equal(formatQuotaStatus(gpt), "api:45% ↺9d4h");
 });
 
 test("falls back to Cursor total when the active pool is absent", () => {
@@ -87,7 +113,7 @@ test("falls back to Cursor total when the active pool is absent", () => {
   );
   assert.ok(total);
   assert.equal(total.pool, "total");
-  assert.equal(formatQuotaStatus(total), "total:99% left (↺in 9d4h)");
+  assert.equal(formatQuotaStatus(total), "total:99% ↺9d4h");
 });
 
 test("recognizes an unavailable auth entry", () => {

@@ -161,14 +161,14 @@ Run the state-machine and cache-prefix contract test:
 
 ```bash
 node --experimental-strip-types \
-  extensions/with-agents/contract-test.ts
+  extensions/with-agents/contract.test.ts
 ```
 
 To print the representative fresh-tail size used by the contract test:
 
 ```bash
 WITH_AGENTS_CACHE_DIAGNOSTICS=1 \
-  node --experimental-strip-types extensions/with-agents/contract-test.ts
+  node --experimental-strip-types extensions/with-agents/contract.test.ts
 ```
 
 Check formatting and extension loading:
@@ -177,7 +177,7 @@ Check formatting and extension loading:
 pnpm dlx oxfmt@latest --check \
   extensions/with-agents/index.ts \
   extensions/with-agents/policy.ts \
-  extensions/with-agents/contract-test.ts
+  extensions/with-agents/contract.test.ts
 
 pi --no-extensions --no-session \
   -e extensions/with-agents/index.ts \

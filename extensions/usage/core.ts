@@ -226,8 +226,28 @@ export function selectQuota(
   };
 }
 
+export type QuotaTone = "dim" | "accent" | "warning" | "error";
+
+export function quotaPercentTone(leftPercent: number): Exclude<QuotaTone, "dim"> {
+  if (leftPercent <= 10) return "error";
+  if (leftPercent <= 25) return "warning";
+  return "accent";
+}
+
+export function styleQuotaStatus(
+  value: QuotaStatus,
+  style: (tone: QuotaTone, text: string) => string,
+): string {
+  const reset = value.reset?.replace(/^in\s+/, "");
+  return (
+    style("dim", `${value.window}:`) +
+    style(quotaPercentTone(value.leftPercent), `${value.leftPercent}%`) +
+    (reset ? style("dim", ` ↺${reset}`) : "")
+  );
+}
+
 export function formatQuotaStatus(value: QuotaStatus): string {
-  return `${value.window}:${value.leftPercent}% left${value.reset ? ` (↺${value.reset})` : ""}`;
+  return styleQuotaStatus(value, (_tone, text) => text);
 }
 
 export function isAuthenticationError(message: string): boolean {

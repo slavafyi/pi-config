@@ -20,10 +20,10 @@ test("hides models without a known useful window", () => {
 
 test("dims, warns, and expires at the configured thresholds", () => {
   const windowMs = 5 * MINUTE_MS;
-  assert.deepEqual(cacheDisplay(0, windowMs, 0), { text: "cache 5:00", tone: "dim" });
-  assert.deepEqual(cacheDisplay(0, windowMs, 3.5 * MINUTE_MS), { text: "cache 1:30", tone: "warning" });
-  assert.deepEqual(cacheDisplay(0, windowMs, windowMs - 1_000), { text: "cache 0:01", tone: "warning" });
-  assert.deepEqual(cacheDisplay(0, windowMs, windowMs), { text: "cache expired", tone: "error" });
+  assert.deepEqual(cacheDisplay(0, windowMs, 0), { text: "5:00", tone: "dim" });
+  assert.deepEqual(cacheDisplay(0, windowMs, 3.5 * MINUTE_MS), { text: "1:30", tone: "warning" });
+  assert.deepEqual(cacheDisplay(0, windowMs, windowMs - 1_000), { text: "0:01", tone: "warning" });
+  assert.deepEqual(cacheDisplay(0, windowMs, windowMs), { text: "expired", tone: "error" });
 });
 
 test("does not restore persisted cache state and keeps the last runtime success after an error", () => {
@@ -33,6 +33,7 @@ test("does not restore persisted cache state and keeps the last runtime success 
 
   const handlers = new Map<string, (event: any, ctx: any) => void>();
   const statuses: Array<string | undefined> = [];
+  const statusIds: string[] = [];
   const previous = {
     role: "assistant",
     provider: "openai-codex",
@@ -44,7 +45,10 @@ test("does not restore persisted cache state and keeps the last runtime success 
     model: { provider: "openai-codex", id: "gpt-5.6-sol" },
     sessionManager: { getBranch: () => [{ type: "message", message: previous }] },
     ui: {
-      setStatus: (_id: string, value: string | undefined) => statuses.push(value),
+      setStatus: (id: string, value: string | undefined) => {
+        statusIds.push(id);
+        statuses.push(value);
+      },
       theme: { fg: (tone: string, text: string) => `${tone}:${text}` },
     },
   };
@@ -55,15 +59,17 @@ test("does not restore persisted cache state and keeps the last runtime success 
     assert.equal(statuses.at(-1), undefined);
 
     handlers.get("turn_start")?.({ timestamp: now }, ctx);
-    assert.equal(statuses.at(-1), "dim:cache 5:00");
+    assert.equal(statuses.at(-1), "dim:5:00");
     handlers.get("turn_end")?.({ message: { ...previous, timestamp: now } }, ctx);
 
     now += MINUTE_MS;
     handlers.get("turn_start")?.({ timestamp: now }, ctx);
     handlers.get("turn_end")?.({ message: { ...previous, stopReason: "error", timestamp: now } }, ctx);
-    assert.equal(statuses.at(-1), "dim:cache 4:00");
+    assert.equal(statuses.at(-1), "dim:4:00");
 
     handlers.get("session_shutdown")?.({}, ctx);
+    assert.ok(statusIds.length > 0);
+    assert.ok(statusIds.every((id) => id === "cache-timer"));
   } finally {
     Date.now = originalNow;
   }

@@ -5,12 +5,13 @@ import {
   patchCursorMessageCost,
   preferredCursorPool,
   selectQuota,
+  styleQuotaStatus,
   type QuotaStatus,
   type UsageReport,
 } from "./core.js";
 
-// Pi sorts footer statuses by ID; the prefix keeps usage first.
-const STATUS_ID = "0-usage";
+// The custom footer places known statuses in fixed slots.
+const STATUS_ID = "usage";
 const TTL_MS = 30_000;
 const CLI_TIMEOUT_MS = 25_000;
 const CODEXBAR_PROVIDERS: Record<string, string> = {
@@ -66,12 +67,7 @@ export default function usage(pi: ExtensionAPI) {
   }
 
   function styledQuotaStatus(ctx: ExtensionContext, quota: QuotaStatus): string {
-    const theme = ctx.ui.theme;
-    return (
-      theme.fg("dim", `${quota.window}:`) +
-      theme.fg("accent", `${quota.leftPercent}% left`) +
-      (quota.reset ? theme.fg("dim", ` (↺${quota.reset})`) : "")
-    );
+    return styleQuotaStatus(quota, (tone, text) => ctx.ui.theme.fg(tone, text));
   }
 
   function showUnavailable(ctx: ExtensionContext, provider: string) {
