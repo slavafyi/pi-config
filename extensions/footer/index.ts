@@ -14,6 +14,7 @@ import {
   type FooterRole,
   type SessionEntryLike,
 } from "./core.js";
+import { emitFooterInvalidate } from "./events.ts";
 
 function loadConfig() {
   const codingAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -80,7 +81,9 @@ export default function footer(pi: ExtensionAPI) {
 
       return {
         dispose: componentCleanup,
-        invalidate() {},
+        invalidate() {
+          emitFooterInvalidate(pi.events);
+        },
         render(width: number): string[] {
           const classified = classifyStatuses(footerData.getExtensionStatuses());
           const statuses = normalizeKnownStatuses(classified.known);

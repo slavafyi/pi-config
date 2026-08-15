@@ -32,8 +32,11 @@ test("does not restore persisted cache state and keeps the last runtime success 
   Date.now = () => now;
 
   const handlers = new Map<string, (event: any, ctx: any) => void>();
+  const eventHandlers = new Map<string, (data: unknown) => void>();
   const statuses: Array<string | undefined> = [];
   const statusIds: string[] = [];
+  let themeName = "light";
+  let unsubscribed = false;
   const previous = {
     role: "assistant",
     provider: "openai-codex",
@@ -49,25 +52,45 @@ test("does not restore persisted cache state and keeps the last runtime success 
         statusIds.push(id);
         statuses.push(value);
       },
-      theme: { fg: (tone: string, text: string) => `${tone}:${text}` },
+      theme: { fg: (tone: string, text: string) => `${themeName}:${tone}:${text}` },
     },
   };
 
   try {
-    cacheTimer({ on: (event: string, handler: (event: any, ctx: any) => void) => handlers.set(event, handler) } as any);
+    cacheTimer({
+      on: (event: string, handler: (event: any, ctx: any) => void) => handlers.set(event, handler),
+      events: {
+        on: (event: string, handler: (data: unknown) => void) => {
+          eventHandlers.set(event, handler);
+          return () => {
+            unsubscribed = true;
+            eventHandlers.delete(event);
+          };
+        },
+      },
+    } as any);
     handlers.get("session_start")?.({}, ctx);
     assert.equal(statuses.at(-1), undefined);
 
     handlers.get("turn_start")?.({ timestamp: now }, ctx);
-    assert.equal(statuses.at(-1), "dim:5:00");
+    assert.equal(statuses.at(-1), "light:dim:5:00");
+
+    themeName = "dark";
+    const beforeInvalidate = statuses.length;
+    eventHandlers.get("footer:invalidate")?.(undefined);
+    assert.equal(statuses.at(-1), "dark:dim:5:00");
+    eventHandlers.get("footer:invalidate")?.(undefined);
+    assert.equal(statuses.length, beforeInvalidate + 1);
+
     handlers.get("turn_end")?.({ message: { ...previous, timestamp: now } }, ctx);
 
     now += MINUTE_MS;
     handlers.get("turn_start")?.({ timestamp: now }, ctx);
     handlers.get("turn_end")?.({ message: { ...previous, stopReason: "error", timestamp: now } }, ctx);
-    assert.equal(statuses.at(-1), "dim:4:00");
+    assert.equal(statuses.at(-1), "dark:dim:4:00");
 
     handlers.get("session_shutdown")?.({}, ctx);
+    assert.equal(unsubscribed, true);
     assert.ok(statusIds.length > 0);
     assert.ok(statusIds.every((id) => id === "cache-timer"));
   } finally {

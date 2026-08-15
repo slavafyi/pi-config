@@ -37,9 +37,12 @@ Reload Pi after setup:
 ## Status
 
 The extension refreshes on startup, model changes, and completed turns when a
-UI is available. Headless sessions skip CodexBar quota requests but still add
-Cursor cost estimates. It uses a 30-second cache, deduplicates concurrent
-requests, and keeps the last good value through temporary failures.
+UI is available. When no status is available, a request that takes longer than
+150 milliseconds shows a spinner; faster requests never flash one. Later
+refreshes keep the current status visible instead of restarting the spinner.
+Headless sessions skip CodexBar quota requests but still add Cursor cost
+estimates. It uses a 30-second cache, deduplicates concurrent requests, and
+keeps the last good value through temporary failures.
 
 The extension publishes the compact display form directly:
 
@@ -52,7 +55,8 @@ api:97% ↺30d4h
 The window and reset are dim. The remaining percentage is accent above 25%,
 warning from 11% through 25%, and error at 10% or below. The custom footer
 preserves those ANSI colors while positioning and truncating the status
-responsively.
+responsively. When the footer is invalidated, the extension restyles its saved
+semantic status with the current theme without running CodexBar again.
 
 OpenAI prefers the weekly Codex window. Cursor shows the active category: Auto
 for Auto/Composer and API for explicitly selected models, falling back to Total

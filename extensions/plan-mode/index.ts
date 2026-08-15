@@ -16,6 +16,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
+import { FOOTER_INVALIDATE_EVENT } from "../footer/events.ts";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
 const PLAN_MODE_MUTATING_TOOLS = new Set(["edit", "write"]);
@@ -47,6 +48,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	let planModeEnabled = false;
 	let executionMode = false;
 	let todoItems: TodoItem[] = [];
+	let activeCtx: ExtensionContext | undefined;
+	let renderedStatus: string | undefined;
+	let renderedWidget: string[] | undefined;
+	let hasRenderedStatus = false;
+	let hasRenderedWidget = false;
 
 	pi.registerFlag("plan", {
 		description: "Start in plan mode (read-only exploration)",
@@ -54,18 +60,35 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		default: false,
 	});
 
+	function publishStatus(ctx: ExtensionContext, next: string | undefined): void {
+		if (hasRenderedStatus && next === renderedStatus) return;
+		hasRenderedStatus = true;
+		renderedStatus = next;
+		ctx.ui.setStatus("plan-mode", next);
+	}
+
+	function sameLines(left: string[] | undefined, right: string[] | undefined): boolean {
+		if (left === undefined || right === undefined) return left === right;
+		return left.length === right.length && left.every((line, index) => line === right[index]);
+	}
+
+	function publishWidget(ctx: ExtensionContext, next: string[] | undefined): void {
+		if (hasRenderedWidget && sameLines(next, renderedWidget)) return;
+		hasRenderedWidget = true;
+		renderedWidget = next ? [...next] : undefined;
+		ctx.ui.setWidget("plan-todos", next);
+	}
+
 	function updateStatus(ctx: ExtensionContext): void {
-		// Footer status
 		if (executionMode && todoItems.length > 0) {
 			const completed = todoItems.filter((t) => t.completed).length;
-			ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("accent", `📋 ${completed}/${todoItems.length}`));
+			publishStatus(ctx, ctx.ui.theme.fg("accent", `📋 ${completed}/${todoItems.length}`));
 		} else if (planModeEnabled) {
-			ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", "⏸ plan"));
+			publishStatus(ctx, ctx.ui.theme.fg("warning", "⏸ plan"));
 		} else {
-			ctx.ui.setStatus("plan-mode", undefined);
+			publishStatus(ctx, undefined);
 		}
 
-		// Widget showing todo list
 		if (executionMode && todoItems.length > 0) {
 			const lines = todoItems.map((item) => {
 				if (item.completed) {
@@ -75,11 +98,15 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				}
 				return `${ctx.ui.theme.fg("muted", "☐ ")}${item.text}`;
 			});
-			ctx.ui.setWidget("plan-todos", lines);
+			publishWidget(ctx, lines);
 		} else {
-			ctx.ui.setWidget("plan-todos", undefined);
+			publishWidget(ctx, undefined);
 		}
 	}
+
+	const unsubscribeInvalidate = pi.events.on(FOOTER_INVALIDATE_EVENT, () => {
+		if (activeCtx) updateStatus(activeCtx);
+	});
 
 	function persistState(): void {
 		pi.appendEntry("plan-mode", {
@@ -281,6 +308,12 @@ After completing a step, include a [DONE:n] tag in your response.`;
 
 	// Restore state on session start/resume
 	pi.on("session_start", async (_event, ctx) => {
+		activeCtx = ctx;
+		renderedStatus = undefined;
+		renderedWidget = undefined;
+		hasRenderedStatus = false;
+		hasRenderedWidget = false;
+
 		if (pi.getFlag("plan") === true) {
 			planModeEnabled = true;
 		}
@@ -328,5 +361,16 @@ After completing a step, include a [DONE:n] tag in your response.`;
 		}
 
 		updateStatus(ctx);
+	});
+
+	pi.on("session_shutdown", (_event, ctx) => {
+		activeCtx = undefined;
+		unsubscribeInvalidate();
+		publishStatus(ctx, undefined);
+		publishWidget(ctx, undefined);
+		renderedStatus = undefined;
+		renderedWidget = undefined;
+		hasRenderedStatus = false;
+		hasRenderedWidget = false;
 	});
 }
