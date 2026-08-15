@@ -10,13 +10,13 @@ unchanged.
 At a wide terminal width, the first line has left- and right-aligned blocks:
 
 ```text
-pi-config:main  gpt-5.6-sol:fast • medium  MCP:0/2  agents:2  ⏸ plan    7d:94% ↺5d13h • cache:98.1% ↺4:23 • ctx:12%/272k • $1.134
+pi-config:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
 ```
 
 Inside tmux, the project name is omitted but the Git branch remains:
 
 ```text
-git:main  gpt-5.6-sol:fast • medium  MCP:0/2  agents:2  ⏸ plan    7d:94% ↺5d13h • cache:98.1% ↺4:23 • ctx:12%/272k • $1.134
+git:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
 ```
 
 A non-Git directory shows its folder name outside tmux and no project identifier
