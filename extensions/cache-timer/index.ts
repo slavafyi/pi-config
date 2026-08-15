@@ -15,8 +15,12 @@ export interface CacheDisplay {
 export function cacheWindowMs(provider: string, model: string): number | undefined {
   const id = model.toLowerCase();
 
-  if (provider === "openai-codex" && id.includes("gpt-5.6")) return 5 * MINUTE_MS;
-  if ((provider === "openai" || provider === "cursor") && id.includes("gpt-5.6")) return 30 * MINUTE_MS;
+  if (
+    (provider === "openai" || provider === "openai-codex" || provider === "cursor") &&
+    id.includes("gpt-5.6")
+  ) {
+    return 30 * MINUTE_MS;
+  }
   if (provider === "anthropic" || (provider === "cursor" && id.includes("claude"))) return 5 * MINUTE_MS;
 
   return undefined;

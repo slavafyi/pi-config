@@ -19,7 +19,7 @@ retain a cache entry longer.
 | Provider | Model | Window | Basis |
 |----------|-------|--------|-------|
 | OpenAI | GPT-5.6 | 30 minutes | Documented minimum |
-| OpenAI Codex subscription | GPT-5.6 | 5 minutes | Conservative observed idle TTL |
+| OpenAI Codex subscription | GPT-5.6 | 30 minutes | Observed idle TTL, matching the OpenAI default |
 | Cursor | GPT-5.6 | 30 minutes | Underlying OpenAI policy |
 | Anthropic | Claude | 5 minutes | Documented default idle TTL |
 | Cursor | Claude | 5 minutes | Underlying Anthropic policy |
