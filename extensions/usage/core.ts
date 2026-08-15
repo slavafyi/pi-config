@@ -226,7 +226,13 @@ export function selectQuota(
   };
 }
 
-export type QuotaTone = "dim" | "accent";
+export type QuotaTone = "dim" | "accent" | "warning" | "error";
+
+export function quotaPercentTone(leftPercent: number): Exclude<QuotaTone, "dim"> {
+  if (leftPercent <= 10) return "error";
+  if (leftPercent <= 25) return "warning";
+  return "accent";
+}
 
 export function styleQuotaStatus(
   value: QuotaStatus,
@@ -235,7 +241,7 @@ export function styleQuotaStatus(
   const reset = value.reset?.replace(/^in\s+/, "");
   return (
     style("dim", `${value.window}:`) +
-    style("accent", `${value.leftPercent}%`) +
+    style(quotaPercentTone(value.leftPercent), `${value.leftPercent}%`) +
     (reset ? style("dim", ` ↺${reset}`) : "")
   );
 }

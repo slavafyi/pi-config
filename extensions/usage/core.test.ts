@@ -8,6 +8,7 @@ import {
   normalizeCursorModelId,
   parseUsageReport,
   patchCursorMessageCost,
+  quotaPercentTone,
   selectCursorQuota,
   selectOpenAiQuota,
   selectQuota,
@@ -78,6 +79,15 @@ test("uses the useful OpenAI weekly window and accents only percent left", () =>
     styled,
     "<dim>7d:</dim><accent>82%</accent><dim> ↺4d22h7m</dim>",
   );
+});
+
+test("changes quota percent tone at warning and error thresholds", () => {
+  assert.equal(quotaPercentTone(100), "accent");
+  assert.equal(quotaPercentTone(26), "accent");
+  assert.equal(quotaPercentTone(25), "warning");
+  assert.equal(quotaPercentTone(11), "warning");
+  assert.equal(quotaPercentTone(10), "error");
+  assert.equal(quotaPercentTone(0), "error");
 });
 
 test("selects the active Cursor pool without combining pools", () => {

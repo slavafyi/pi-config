@@ -5,6 +5,7 @@ import {
   classifyStatuses,
   normalizeKnownStatuses,
   parseFooterConfig,
+  prefixStyledText,
   projectLabel,
   projectName,
   renderFooter,
@@ -151,6 +152,18 @@ test("defaults unknown extension statuses off and parses an explicit opt-in", ()
   });
 });
 
+test("puts cache reset markers inside the timer's ANSI style", () => {
+  assert.equal(prefixStyledText("4:23", "↺"), "↺4:23");
+  assert.equal(
+    prefixStyledText("\x1b[33m4:23\x1b[0m", "↺"),
+    "\x1b[33m↺4:23\x1b[0m",
+  );
+  assert.equal(
+    prefixStyledText("\x1b[1m\x1b[33m4:23\x1b[0m", "↺"),
+    "\x1b[1m\x1b[33m↺4:23\x1b[0m",
+  );
+});
+
 test("calculates full cost and the latest assistant cache hit", () => {
   const usage = (cacheRead: number, cost: number) => ({
     input: 10,
@@ -218,7 +231,7 @@ test("preserves owned extension colors inside the responsive layout", () => {
 
   const wide = renderFooter(owned, 180, tools);
   assert.ok(wide[0]!.includes(quotaStyled));
-  assert.ok(wide[0]!.includes(timerStyled));
+  assert.ok(wide[0]!.includes("\x1b[33m↺4:23\x1b[0m"));
   assert.ok(wide[0]!.includes(planStyled));
   assertWidths(wide, 180);
 

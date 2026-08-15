@@ -110,6 +110,12 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI_PATTERN, "");
 }
 
+export function prefixStyledText(styled: string, prefix: string): string {
+  const leadingAnsi = styled.match(/^(?:\x1b\[[0-?]*[ -/]*[@-~])+/)?.[0];
+  if (!leadingAnsi) return `${prefix}${styled}`;
+  return `${leadingAnsi}${prefix}${styled.slice(leadingAnsi.length)}`;
+}
+
 export function sanitizeStatus(text: string): string {
   return text
     .replace(/[\r\n\t]/g, " ")
@@ -417,12 +423,15 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
       ? ""
       : formatPercent(hit, state.cacheStyle === 0 ? state.percentDigits : 0);
     let prefix = "";
+    let timerPrefix = "";
     if (state.cacheStyle === 0) {
-      prefix = `cache:${hitText}${timer && hitText ? " " : ""}${timer ? "↺" : ""}`;
+      prefix = `cache:${hitText}${timer && hitText ? " " : ""}`;
+      timerPrefix = timer ? "↺" : "";
     } else if (state.cacheStyle === 1) {
-      prefix = `C:${hitText}${timer ? "/" : ""}`;
+      prefix = `C:${hitText}`;
+      timerPrefix = timer ? "/" : "";
     } else if (timer) {
-      prefix = "↺";
+      timerPrefix = "↺";
     }
 
     if (prefix || timer) {
@@ -431,7 +440,9 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
         ? input.metrics.cacheTimerStyled
         : undefined;
       const styledTimer = timer
-        ? preservedTimer ?? styleText(timer, timerRole, input)
+        ? preservedTimer
+          ? prefixStyledText(preservedTimer, timerPrefix)
+          : styleText(`${timerPrefix}${timer}`, timerRole, input)
         : "";
       right.push({
         text: `${styleText(prefix, "cache", input)}${styledTimer}`,

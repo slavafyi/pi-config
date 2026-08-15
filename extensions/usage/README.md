@@ -49,9 +49,10 @@ auto:99% ↺30d4h
 api:97% ↺30d4h
 ```
 
-The window and reset are dim; only the remaining percentage uses the accent
-color. The custom footer preserves those ANSI colors while positioning and
-truncating the status responsively.
+The window and reset are dim. The remaining percentage is accent above 25%,
+warning from 11% through 25%, and error at 10% or below. The custom footer
+preserves those ANSI colors while positioning and truncating the status
+responsively.
 
 OpenAI prefers the weekly Codex window. Cursor shows the active category: Auto
 for Auto/Composer and API for explicitly selected models, falling back to Total

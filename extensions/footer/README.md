@@ -35,6 +35,8 @@ Known values are parsed and placed in fixed slots. The footer preserves the
 canonical ANSI styling supplied by the owned `usage`, `cache-timer`, and
 `plan-mode` extensions whenever their displayed text does not need rewriting.
 This retains dynamic cache and quota colors without duplicating their rules.
+The cache reset marker is inserted inside the timer's preserved style, so
+`↺0:30` changes color as one unit.
 
 MCP and subagent statuses still require footer-side normalization because they
 come from third-party extensions and change shape at narrower widths. Footer-
