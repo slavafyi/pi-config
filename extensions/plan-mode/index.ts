@@ -82,9 +82,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	function updateStatus(ctx: ExtensionContext): void {
 		if (executionMode && todoItems.length > 0) {
 			const completed = todoItems.filter((t) => t.completed).length;
-			publishStatus(ctx, ctx.ui.theme.fg("accent", `📋 ${completed}/${todoItems.length}`));
+			publishStatus(ctx, ctx.ui.theme.fg("accent", `● ${completed}/${todoItems.length}`));
 		} else if (planModeEnabled) {
-			publishStatus(ctx, ctx.ui.theme.fg("warning", "⏸ plan"));
+			publishStatus(ctx, ctx.ui.theme.fg("warning", "⏸︎ plan"));
 		} else {
 			publishStatus(ctx, undefined);
 		}
@@ -93,10 +93,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			const lines = todoItems.map((item) => {
 				if (item.completed) {
 					return (
-						ctx.ui.theme.fg("success", "☑ ") + ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(item.text))
+						ctx.ui.theme.fg("success", "✓ ") + ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(item.text))
 					);
 				}
-				return `${ctx.ui.theme.fg("muted", "☐ ")}${item.text}`;
+				return `${ctx.ui.theme.fg("muted", "○ ")}${item.text}`;
 			});
 			publishWidget(ctx, lines);
 		} else {
@@ -262,7 +262,7 @@ After completing a step, include a [DONE:n] tag in your response.`;
 		persistState();
 
 		// Show plan steps and prompt for next action
-		const todoListText = todoItems.map((t, i) => `${i + 1}. ☐ ${t.text}`).join("\n");
+		const todoListText = todoItems.map((t, i) => `${i + 1}. ○ ${t.text}`).join("\n");
 		const planTodoListMessage = {
 			customType: "plan-todo-list",
 			content: `**Plan Steps (${todoItems.length}):**\n\n${todoListText}`,

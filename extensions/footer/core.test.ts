@@ -20,6 +20,7 @@ import {
 
 function cellWidth(character: string): number {
   const code = character.codePointAt(0) ?? 0;
+  if (code === 0xfe0e || code === 0xfe0f) return 0;
   return code >= 0x1100 && (
     code <= 0x115f ||
     code === 0x2329 ||
@@ -74,7 +75,7 @@ function input(overrides: Partial<FooterLayoutInput> = {}): FooterLayoutInput {
       cacheTimer: "4:23",
       mcp: "MCP:0/2",
       agents: "agents:2",
-      plan: "⏸ plan",
+      plan: "⏸︎ plan",
       mcpError: false,
       agentsActive: true,
       planActive: true,
@@ -108,7 +109,7 @@ test("builds Git and non-Git labels inside and outside tmux", () => {
 test("classifies fixed status slots independently of Map order", () => {
   const classified = classifyStatuses(new Map([
     ["z-extra", "extra"],
-    ["plan-mode", "\x1b[33m⏸ plan\x1b[0m"],
+    ["plan-mode", "\x1b[33m⏸︎ plan\x1b[0m"],
     ["usage", "7d:94% left (↺in 5d13h)"],
     ["mcp", "🔌 MCP: 0/2"],
     ["subagents", "2 running agents, 1 queued"],
@@ -120,7 +121,7 @@ test("classifies fixed status slots independently of Map order", () => {
   assert.equal(known.cacheTimer, "4:23");
   assert.equal(known.mcp, "MCP:0/2");
   assert.equal(known.agents, "agents:2+1q");
-  assert.equal(known.plan, "⏸ plan");
+  assert.equal(known.plan, "⏸︎ plan");
 });
 
 test("parses every footer status shape emitted by pi-subagents", () => {
@@ -212,7 +213,7 @@ test("calculates full cost and the latest assistant cache hit", () => {
 
 test("renders wide, compact, narrow, and minimal layouts by measured width", () => {
   const wide = renderFooter(input(), 180, tools);
-  assert.match(wide[0]!, /^pi-config:main  gpt-5\.6-sol:fast\/medium  MCP:0\/2  agents:2  ⏸ plan\s+/);
+  assert.match(wide[0]!, /^pi-config:main  gpt-5\.6-sol:fast\/medium  MCP:0\/2  agents:2  ⏸︎ plan\s+/);
   assert.ok(wide[0]!.endsWith("7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134"));
 
   const compact = renderFooter(input(), 110, tools);
@@ -238,7 +239,7 @@ test("preserves owned extension colors inside the responsive layout", () => {
   const quotaStyled =
     "\x1b[2m7d:\x1b[0m\x1b[36m94%\x1b[0m\x1b[2m ↺5d13h\x1b[0m";
   const timerStyled = "\x1b[33m4:23\x1b[0m";
-  const planStyled = "\x1b[33m⏸ plan\x1b[0m";
+  const planStyled = "\x1b[33m⏸︎ plan\x1b[0m";
   const owned = input({
     statuses: {
       ...input().statuses,
@@ -265,6 +266,28 @@ test("preserves owned extension colors inside the responsive layout", () => {
   for (const width of [110, 72, 30]) {
     assertWidths(renderFooter(owned, width, tools), width);
   }
+});
+
+test("colors only the context percentage at warning thresholds", () => {
+  const colored = renderFooter(
+    input({
+      metrics: {
+        ...input().metrics,
+        context: { tokens: 250_000, contextWindow: 272_000, percent: 92 },
+      },
+      style(text, role) {
+        const color = role === "error" ? 31 : role === "warning" ? 33 : 2;
+        return `\x1b[${color}m${text}\x1b[0m`;
+      },
+    }),
+    180,
+    tools,
+  );
+  assert.ok(
+    colored[0]!.includes(
+      "\x1b[2mctx:\x1b[0m\x1b[31m92%\x1b[0m\x1b[2m/272k\x1b[0m",
+    ),
+  );
 });
 
 test("colors running and queued agent counts independently", () => {
@@ -332,7 +355,7 @@ test("preserves active and critical statuses before optional metrics", () => {
       cacheTimer: "expired",
       mcp: "MCP:error auth",
       agents: "agents:2+1q",
-      plan: "⏸ plan",
+      plan: "⏸︎ plan",
       mcpError: true,
       agentsActive: true,
       planActive: true,
