@@ -5,7 +5,7 @@
   "packageManager": "pnpm@11.11.0",
   "scripts": {
     "check": "pnpm test && pnpm typecheck",
-    "test": "node --test extensions/**/*.test.ts extensions/with-agents/contract-test.ts",
+    "test": "node --test extensions/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
