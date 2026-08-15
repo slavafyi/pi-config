@@ -10,13 +10,13 @@ unchanged.
 At a wide terminal width, the first line has left- and right-aligned blocks:
 
 ```text
-pi-config:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
+pi-config:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
 ```
 
 Inside tmux, the project name is omitted but the Git branch remains:
 
 ```text
-git:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
+git:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
 ```
 
 A non-Git directory shows its folder name outside tmux and no project identifier
@@ -45,8 +45,9 @@ MCP and subagent statuses still require footer-side normalization because they
 come from third-party extensions and change shape at narrower widths. For
 subagents, the label stays dim, the running count uses accent, and the queued
 suffix uses warning in all responsive forms (`agents:2+1q`, `A:2+1q`, or
-`A2+1q`). Footer-owned context metrics use warning and error colors at the same
-thresholds as Pi's built-in footer; the rest of the footer stays dim.
+`A2+1q`). For footer-owned context metrics, only the percentage uses warning
+and error colors at the same thresholds as Pi's built-in footer; the label and
+context-window size stay dim.
 
 Unknown extension statuses are hidden by default. To show their sanitized
 values on a separate second line, enable the footer-specific setting in

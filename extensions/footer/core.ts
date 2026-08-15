@@ -199,7 +199,7 @@ export function normalizePlan(text: string | undefined): {
 } {
   if (!text) return { active: false };
   const clean = plainStatus(text);
-  if (/plan/i.test(clean) && /⏸/.test(clean)) return { text: "⏸ plan", active: true };
+  if (/plan/i.test(clean) && /⏸/.test(clean)) return { text: "⏸︎ plan", active: true };
   return { text: clean || undefined, active: Boolean(clean) };
 }
 
@@ -384,6 +384,30 @@ function preservesText(styled: string | undefined, plain: string): styled is str
   return styled !== undefined && stripAnsi(styled) === plain;
 }
 
+function renderContextPart(
+  context: ContextLike,
+  contextStyle: number,
+  percentDigits: number,
+  input: FooterLayoutInput,
+): FooterPart {
+  const percent = context.percent === null
+    ? "?"
+    : formatPercent(context.percent, percentDigits);
+  const prefix = contextStyle < 2 ? "ctx:" : "";
+  const suffix = contextStyle === 0 ? `/${formatTokens(context.contextWindow)}` : "";
+  const styledPrefix = prefix ? styleText(prefix, "context", input) : "";
+  const styledSuffix = suffix ? styleText(suffix, "context", input) : "";
+  return {
+    text: `${styledPrefix}${styleText(
+      percent,
+      roleForPercent(context.percent),
+      input,
+    )}${styledSuffix}`,
+    role: "context",
+    preserveStyle: true,
+  };
+}
+
 function renderParts(
   parts: FooterPart[],
   separator: string,
@@ -425,7 +449,7 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
   const agentPart = renderAgentPart(statuses, state.agentStyle, input);
   if (agentPart) left.push(agentPart);
   if (statuses.plan) {
-    const text = state.planCompact && statuses.plan === "⏸ plan" ? "⏸" : statuses.plan;
+    const text = state.planCompact && statuses.plan === "⏸︎ plan" ? "⏸︎" : statuses.plan;
     const styled = !state.planCompact && preservesText(statuses.planStyled, text)
       ? statuses.planStyled
       : undefined;
@@ -489,11 +513,7 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
 
   const context = input.metrics.context;
   if (context) {
-    const percent = context.percent === null ? "?" : formatPercent(context.percent, state.percentDigits);
-    let text = percent;
-    if (state.contextStyle === 0) text = `ctx:${percent}/${formatTokens(context.contextWindow)}`;
-    else if (state.contextStyle === 1) text = `ctx:${percent}`;
-    right.push({ text, role: roleForPercent(context.percent) });
+    right.push(renderContextPart(context, state.contextStyle, state.percentDigits, input));
   }
   if (!state.hideCost && input.metrics.cost > 0) {
     right.push({ text: `$${input.metrics.cost.toFixed(state.costDigits)}`, role: "cost" });
@@ -536,10 +556,7 @@ function priorityFallback(input: FooterLayoutInput): string {
     });
   }
   if (input.metrics.context && (input.metrics.context.percent ?? 0) >= 80) {
-    parts.push({
-      text: `ctx:${formatPercent(input.metrics.context.percent!, 0)}`,
-      role: roleForPercent(input.metrics.context.percent),
-    });
+    parts.push(renderContextPart(input.metrics.context, 1, 0, input));
   }
   return renderParts(parts, "  ", input);
 }

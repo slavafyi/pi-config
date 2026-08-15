@@ -61,11 +61,11 @@ test("changes modes without changing the provider tool prefix", async () => {
 	assert.equal(normal.message.customType, "plan-normal-context");
 
 	await commands.get("plan")?.("", ctx);
-	assert.equal(statuses.at(-1), "light:warning:⏸ plan");
+	assert.equal(statuses.at(-1), "light:warning:⏸︎ plan");
 	themeName = "dark";
 	const statusesBeforeInvalidate = statuses.length;
 	eventHandlers.get("footer:invalidate")?.(undefined);
-	assert.equal(statuses.at(-1), "dark:warning:⏸ plan");
+	assert.equal(statuses.at(-1), "dark:warning:⏸︎ plan");
 	eventHandlers.get("footer:invalidate")?.(undefined);
 	assert.equal(statuses.length, statusesBeforeInvalidate + 1);
 
@@ -106,7 +106,8 @@ test("changes modes without changing the provider tool prefix", async () => {
 	assert.deepEqual(sentMessages[0].options, { triggerTurn: true, deliverAs: "followUp" });
 	assert.deepEqual(setActiveToolsCalls, []);
 	assert.equal(handlers.has("context"), false);
-	assert.ok(widgets.at(-1)?.some((line) => line.includes("dark:muted:")));
+	assert.equal(statuses.at(-1), "dark:accent:● 0/2");
+	assert.ok(widgets.at(-1)?.every((line) => line.includes("dark:muted:○ ")));
 
 	themeName = "light-again";
 	eventHandlers.get("footer:invalidate")?.(undefined);
