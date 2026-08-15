@@ -16,11 +16,11 @@ pi-config:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94
 Inside tmux, the project name is omitted but the Git branch remains:
 
 ```text
-git:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
+main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
 ```
 
 A non-Git directory shows its folder name outside tmux and no project identifier
-inside tmux. A detached checkout uses `project:detached` or `git:detached`.
+inside tmux. A detached checkout uses `project:HEAD` or `HEAD`.
 Branch changes update the footer without a reload.
 
 The footer recognizes these fixed status IDs:

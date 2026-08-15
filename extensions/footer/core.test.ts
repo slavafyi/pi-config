@@ -100,10 +100,12 @@ test("builds Git and non-Git labels inside and outside tmux", () => {
   assert.equal(projectName("/work/pi-config\n", "/fallback"), "pi-config");
   assert.equal(projectName(undefined, "/work/folder"), "folder");
   assert.equal(projectLabel({ project: "pi-config", branch: "main", inGit: true, inTmux: false }), "pi-config:main");
+  assert.equal(projectLabel({ project: undefined, branch: "main", inGit: true, inTmux: false }), "main");
   assert.equal(projectLabel({ project: "folder", branch: null, inGit: false, inTmux: false }), "folder");
-  assert.equal(projectLabel({ project: "pi-config", branch: "main", inGit: true, inTmux: true }), "git:main");
+  assert.equal(projectLabel({ project: "pi-config", branch: "main", inGit: true, inTmux: true }), "main");
+  assert.equal(projectLabel({ project: "pi-config", branch: "detached", inGit: true, inTmux: true }), "HEAD");
   assert.equal(projectLabel({ project: "folder", branch: null, inGit: false, inTmux: true }), undefined);
-  assert.equal(projectLabel({ project: "pi-config", branch: "detached", inGit: true, inTmux: false }), "pi-config:detached");
+  assert.equal(projectLabel({ project: "pi-config", branch: "detached", inGit: true, inTmux: false }), "pi-config:HEAD");
 });
 
 test("classifies fixed status slots independently of Map order", () => {
@@ -231,7 +233,7 @@ test("renders wide, compact, narrow, and minimal layouts by measured width", () 
 
 test("keeps tmux branch and compacts model and thinking to a slash form", () => {
   const lines = renderFooter(input({ inTmux: true }), 62, tools);
-  assert.match(lines[0]!, /(?:git:main|main)/);
+  assert.match(lines[0]!, /\bmain\b/);
   assert.match(lines[0]!, /5\.6\/m/);
 });
 

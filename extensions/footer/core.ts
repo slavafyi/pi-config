@@ -243,8 +243,9 @@ export function projectLabel(options: {
   inTmux: boolean;
 }): string | undefined {
   const { project, branch, inGit, inTmux } = options;
-  if (inTmux) return inGit ? `git:${branch || "detached"}` : undefined;
-  if (inGit) return `${project || "git"}:${branch || "detached"}`;
+  const ref = !branch || branch === "detached" ? "HEAD" : branch;
+  if (inTmux) return inGit ? ref : undefined;
+  if (inGit) return project ? `${project}:${ref}` : ref;
   return project;
 }
 
