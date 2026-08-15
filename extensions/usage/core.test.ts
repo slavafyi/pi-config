@@ -134,6 +134,42 @@ test("normalizes context and fast/slow model selectors", () => {
     base: "composer-2.5",
     fast: false,
   });
+  assert.deepEqual(normalizeCursorModelId("grok-4-6:fast"), {
+    base: "grok-4.6",
+    fast: true,
+  });
+});
+
+test("uses current Cursor rates for newly listed and repriced models", () => {
+  const usage = {
+    input: 1_000_000,
+    output: 1_000_000,
+    cacheRead: 1_000_000,
+    cacheWrite: 1_000_000,
+  };
+  const expected = new Map([
+    ["claude-sonnet-5", { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 }],
+    ["gemini-3.7-flash", { input: 0.75, output: 3.5, cacheRead: 0.075, cacheWrite: 0 }],
+    ["glm-5.2", { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 0 }],
+    ["grok-4.5:fast", { input: 4, output: 12, cacheRead: 1, cacheWrite: 0 }],
+    ["grok-4.6:fast", { input: 4, output: 12, cacheRead: 1, cacheWrite: 0 }],
+    ["kimi-k2.7-code", { input: 0.95, output: 4, cacheRead: 0.19, cacheWrite: 0 }],
+  ]);
+
+  for (const [model, rates] of expected) {
+    const cost = estimateCursorCost(model, usage);
+    assert.ok(cost, model);
+    assert.deepEqual(
+      {
+        input: cost.input,
+        output: cost.output,
+        cacheRead: cost.cacheRead,
+        cacheWrite: cost.cacheWrite,
+      },
+      rates,
+      model,
+    );
+  }
 });
 
 test("uses explicit Fast rates and emits a complete cost breakdown", () => {
