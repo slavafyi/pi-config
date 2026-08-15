@@ -7,7 +7,8 @@ unexpected cache miss after leaving an expensive conversation idle.
 The extension publishes `4:23` while active or `expired` when the window ends.
 The timer is dim while the cache window is healthy and becomes a warning for
 the last 30%. Each model request resets it; it keeps ticking while the model
-streams and while tools run. The
+streams and while tools run. Footer invalidation reapplies the current theme
+without restarting the timer. The
 indicator stays hidden after starting, resuming, reloading, or navigating a
 session until the next request because the restored prompt prefix may differ.
 Expiration means the documented or observed window ended; the provider may

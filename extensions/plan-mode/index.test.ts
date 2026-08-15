@@ -5,12 +5,26 @@ import planMode, { MODE_GUARD_PROMPT } from "./index.ts";
 
 test("changes modes without changing the provider tool prefix", async () => {
 	const handlers = new Map<string, (event: any, ctx: any) => any>();
+	const eventHandlers = new Map<string, (data: unknown) => void>();
 	const commands = new Map<string, (args: string, ctx: any) => Promise<void>>();
 	const setActiveToolsCalls: string[][] = [];
 	const sentMessages: Array<{ message: any; options: any }> = [];
 	const entries: any[] = [];
+	const statuses: Array<string | undefined> = [];
+	const widgets: Array<string[] | undefined> = [];
+	let themeName = "light";
+	let unsubscribed = false;
 	const pi = {
 		on: (event: string, handler: (event: any, ctx: any) => any) => handlers.set(event, handler),
+		events: {
+			on: (event: string, handler: (data: unknown) => void) => {
+				eventHandlers.set(event, handler);
+				return () => {
+					unsubscribed = true;
+					eventHandlers.delete(event);
+				};
+			},
+		},
 		registerFlag: () => {},
 		getFlag: () => false,
 		registerCommand: (
@@ -28,13 +42,13 @@ test("changes modes without changing the provider tool prefix", async () => {
 		sessionManager: { getEntries: () => entries },
 		ui: {
 			notify: () => {},
-			setStatus: () => {},
-			setWidget: () => {},
+			setStatus: (_id: string, value: string | undefined) => statuses.push(value),
+			setWidget: (_id: string, value: string[] | undefined) => widgets.push(value),
 			select: async () => "Execute the plan (track progress)",
 			editor: async () => undefined,
 			theme: {
-				fg: (_tone: string, text: string) => text,
-				strikethrough: (text: string) => text,
+				fg: (tone: string, text: string) => `${themeName}:${tone}:${text}`,
+				strikethrough: (text: string) => `~${text}~`,
 			},
 		},
 	};
@@ -47,6 +61,14 @@ test("changes modes without changing the provider tool prefix", async () => {
 	assert.equal(normal.message.customType, "plan-normal-context");
 
 	await commands.get("plan")?.("", ctx);
+	assert.equal(statuses.at(-1), "light:warning:⏸ plan");
+	themeName = "dark";
+	const statusesBeforeInvalidate = statuses.length;
+	eventHandlers.get("footer:invalidate")?.(undefined);
+	assert.equal(statuses.at(-1), "dark:warning:⏸ plan");
+	eventHandlers.get("footer:invalidate")?.(undefined);
+	assert.equal(statuses.length, statusesBeforeInvalidate + 1);
+
 	const planning = await handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
 	assert.equal(planning.systemPrompt, normal.systemPrompt);
 	assert.equal(planning.message.customType, "plan-mode-context");
@@ -84,4 +106,14 @@ test("changes modes without changing the provider tool prefix", async () => {
 	assert.deepEqual(sentMessages[0].options, { triggerTurn: true, deliverAs: "followUp" });
 	assert.deepEqual(setActiveToolsCalls, []);
 	assert.equal(handlers.has("context"), false);
+	assert.ok(widgets.at(-1)?.some((line) => line.includes("dark:muted:")));
+
+	themeName = "light-again";
+	eventHandlers.get("footer:invalidate")?.(undefined);
+	assert.ok(widgets.at(-1)?.some((line) => line.includes("light-again:muted:")));
+
+	handlers.get("session_shutdown")?.({}, ctx);
+	assert.equal(statuses.at(-1), undefined);
+	assert.equal(widgets.at(-1), undefined);
+	assert.equal(unsubscribed, true);
 });

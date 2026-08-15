@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, TurnEndEvent } from "@earendil-works/pi-coding-agent";
+import { FOOTER_INVALIDATE_EVENT } from "../footer/events.ts";
 
 const STATUS_ID = "cache-timer";
 const MINUTE_MS = 60_000;
@@ -51,15 +52,27 @@ interface CacheAnchor {
 export default function cacheTimer(pi: ExtensionAPI) {
   let interval: ReturnType<typeof setInterval> | undefined;
   let confirmed: CacheAnchor | undefined;
+  let visible: CacheAnchor | undefined;
+  let activeCtx: ExtensionContext | undefined;
+  let renderedStatus: string | undefined;
+  let hasRenderedStatus = false;
 
   function stopInterval() {
     if (interval) clearInterval(interval);
     interval = undefined;
   }
 
+  function publishStatus(ctx: ExtensionContext, next: string | undefined) {
+    if (hasRenderedStatus && next === renderedStatus) return;
+    hasRenderedStatus = true;
+    renderedStatus = next;
+    ctx.ui.setStatus(STATUS_ID, next);
+  }
+
   function hide(ctx: ExtensionContext) {
     stopInterval();
-    ctx.ui.setStatus(STATUS_ID, undefined);
+    visible = undefined;
+    publishStatus(ctx, undefined);
   }
 
   function reset(ctx: ExtensionContext) {
@@ -76,24 +89,39 @@ export default function cacheTimer(pi: ExtensionAPI) {
     return ctx.model?.provider === value.provider && ctx.model.id === value.model;
   }
 
+  function update(ctx: ExtensionContext, value: CacheAnchor) {
+    if (!isCurrent(ctx, value)) {
+      hide(ctx);
+      return;
+    }
+    const display = cacheDisplay(value.timestamp, value.windowMs);
+    publishStatus(ctx, ctx.ui.theme.fg(display.tone, display.text));
+    if (display.tone === "error") stopInterval();
+  }
+
   function show(ctx: ExtensionContext, value: CacheAnchor) {
     stopInterval();
     if (!isCurrent(ctx, value)) {
       hide(ctx);
       return;
     }
-
-    const update = () => {
-      const display = cacheDisplay(value.timestamp, value.windowMs);
-      ctx.ui.setStatus(STATUS_ID, ctx.ui.theme.fg(display.tone, display.text));
-      if (display.tone === "error") stopInterval();
-    };
-
-    update();
-    if (value.timestamp + value.windowMs > Date.now()) interval = setInterval(update, 1_000);
+    visible = value;
+    update(ctx, value);
+    if (value.timestamp + value.windowMs > Date.now()) {
+      interval = setInterval(() => update(ctx, value), 1_000);
+    }
   }
 
-  pi.on("session_start", (_event, ctx) => reset(ctx));
+  const unsubscribeInvalidate = pi.events.on(FOOTER_INVALIDATE_EVENT, () => {
+    if (activeCtx && visible) update(activeCtx, visible);
+  });
+
+  pi.on("session_start", (_event, ctx) => {
+    activeCtx = ctx;
+    renderedStatus = undefined;
+    hasRenderedStatus = false;
+    reset(ctx);
+  });
   pi.on("model_select", (_event, ctx) => reset(ctx));
   pi.on("turn_start", (event, ctx) => {
     if (!ctx.model) return reset(ctx);
@@ -115,5 +143,11 @@ export default function cacheTimer(pi: ExtensionAPI) {
   });
   pi.on("session_tree", (_event, ctx) => reset(ctx));
   pi.on("session_compact", (_event, ctx) => reset(ctx));
-  pi.on("session_shutdown", (_event, ctx) => reset(ctx));
+  pi.on("session_shutdown", (_event, ctx) => {
+    activeCtx = undefined;
+    unsubscribeInvalidate();
+    reset(ctx);
+    renderedStatus = undefined;
+    hasRenderedStatus = false;
+  });
 }
