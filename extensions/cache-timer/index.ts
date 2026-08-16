@@ -15,6 +15,9 @@ export interface CacheDisplay {
 export function cacheWindowMs(provider: string, model: string): number | undefined {
   const id = model.toLowerCase();
 
+  // Temporary lower bound while longer Codex subscription retention tests are in progress.
+  if (provider === "openai-codex" && id.includes("gpt-5.5")) return 60 * MINUTE_MS;
+
   if (
     (provider === "openai" || provider === "openai-codex" || provider === "cursor") &&
     id.includes("gpt-5.6")

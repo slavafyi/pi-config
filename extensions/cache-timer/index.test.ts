@@ -6,6 +6,7 @@ const MINUTE_MS = 60_000;
 
 test("uses documented and observed cache windows", () => {
   assert.equal(cacheWindowMs("openai", "gpt-5.6"), 30 * MINUTE_MS);
+  assert.equal(cacheWindowMs("openai-codex", "gpt-5.5"), 60 * MINUTE_MS);
   assert.equal(cacheWindowMs("openai-codex", "gpt-5.6-sol"), 30 * MINUTE_MS);
   assert.equal(cacheWindowMs("cursor", "gpt-5.6-sol@1m:fast"), 30 * MINUTE_MS);
   assert.equal(cacheWindowMs("anthropic", "claude-opus-4-8"), 5 * MINUTE_MS);
