@@ -4,9 +4,10 @@ import cacheTimer, { cacheDisplay, cacheWindowMs } from "./index.ts";
 
 const MINUTE_MS = 60_000;
 
-test("uses documented windows and the conservative Codex heuristic", () => {
+test("uses documented and observed cache windows", () => {
   assert.equal(cacheWindowMs("openai", "gpt-5.6"), 30 * MINUTE_MS);
-  assert.equal(cacheWindowMs("openai-codex", "gpt-5.6-sol"), 5 * MINUTE_MS);
+  assert.equal(cacheWindowMs("openai-codex", "gpt-5.5"), 60 * MINUTE_MS);
+  assert.equal(cacheWindowMs("openai-codex", "gpt-5.6-sol"), 30 * MINUTE_MS);
   assert.equal(cacheWindowMs("cursor", "gpt-5.6-sol@1m:fast"), 30 * MINUTE_MS);
   assert.equal(cacheWindowMs("anthropic", "claude-opus-4-8"), 5 * MINUTE_MS);
   assert.equal(cacheWindowMs("cursor", "claude-opus-4-8@1m"), 5 * MINUTE_MS);
@@ -73,12 +74,12 @@ test("does not restore persisted cache state and keeps the last runtime success 
     assert.equal(statuses.at(-1), undefined);
 
     handlers.get("turn_start")?.({ timestamp: now }, ctx);
-    assert.equal(statuses.at(-1), "light:dim:5:00");
+    assert.equal(statuses.at(-1), "light:dim:30:00");
 
     themeName = "dark";
     const beforeInvalidate = statuses.length;
     eventHandlers.get("footer:invalidate")?.(undefined);
-    assert.equal(statuses.at(-1), "dark:dim:5:00");
+    assert.equal(statuses.at(-1), "dark:dim:30:00");
     eventHandlers.get("footer:invalidate")?.(undefined);
     assert.equal(statuses.length, beforeInvalidate + 1);
 
@@ -87,7 +88,7 @@ test("does not restore persisted cache state and keeps the last runtime success 
     now += MINUTE_MS;
     handlers.get("turn_start")?.({ timestamp: now }, ctx);
     handlers.get("turn_end")?.({ message: { ...previous, stopReason: "error", timestamp: now } }, ctx);
-    assert.equal(statuses.at(-1), "dark:dim:4:00");
+    assert.equal(statuses.at(-1), "dark:dim:29:00");
 
     handlers.get("session_shutdown")?.({}, ctx);
     assert.equal(unsubscribed, true);

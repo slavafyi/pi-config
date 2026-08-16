@@ -265,6 +265,7 @@ const MODEL_ALIASES: Record<string, string> = {
   "sonnet-5": "claude-sonnet-5",
   "composer-2-5": "composer-2.5",
   "grok-4-5": "grok-4.5",
+  "grok-4-6": "grok-4.6",
   "gpt-5-6-luna": "gpt-5.6-luna",
   "gpt-5-6-sol": "gpt-5.6-sol",
   "gpt-5-6-terra": "gpt-5.6-terra",
@@ -284,13 +285,15 @@ const STANDARD_RATES: Record<string, TokenRates> = {
   "claude-sonnet-4": { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
   "claude-sonnet-4-5": { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
   "claude-sonnet-4-6": { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
-  "claude-sonnet-5": { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
+  "claude-sonnet-5": { input: 2, cacheWrite: 2.5, cacheRead: 0.2, output: 10 },
   "composer-2.5": { input: 0.5, cacheWrite: 0, cacheRead: 0.2, output: 2.5 },
   "gemini-2.5-flash": { input: 0.3, cacheWrite: 0, cacheRead: 0.03, output: 2.5 },
   "gemini-3-flash": { input: 0.5, cacheWrite: 0, cacheRead: 0.05, output: 3 },
   "gemini-3.1-pro": { input: 2, cacheWrite: 0.375, cacheRead: 0.2, output: 12 },
   "gemini-3.5-flash": { input: 1.5, cacheWrite: 0.083333, cacheRead: 0.15, output: 9 },
   "gemini-3.6-flash": { input: 1.5, cacheWrite: 0.083333, cacheRead: 0.15, output: 7.5 },
+  "gemini-3.7-flash": { input: 0.75, cacheWrite: 0, cacheRead: 0.075, output: 3.5 },
+  "glm-5.2": { input: 1.4, cacheWrite: 0, cacheRead: 0.26, output: 4.4 },
   "gpt-5-mini": { input: 0.25, cacheWrite: 0, cacheRead: 0.025, output: 2 },
   "gpt-5.1": { input: 1.25, cacheWrite: 0, cacheRead: 0.125, output: 10 },
   "gpt-5.2": { input: 1.75, cacheWrite: 0, cacheRead: 0.175, output: 14 },
@@ -303,6 +306,8 @@ const STANDARD_RATES: Record<string, TokenRates> = {
   "gpt-5.6-sol": { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 30 },
   "gpt-5.6-terra": { input: 2, cacheWrite: 2.5, cacheRead: 0.2, output: 12 },
   "grok-4.5": { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
+  "grok-4.6": { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
+  "kimi-k2.7-code": { input: 0.95, cacheWrite: 0, cacheRead: 0.19, output: 4 },
   "kimi-k3": { input: 3, cacheWrite: 0, cacheRead: 0.3, output: 15 },
 };
 
@@ -314,7 +319,8 @@ const FAST_RATES: Record<string, TokenRates> = {
   "gpt-5.6-luna": { input: 0.4, cacheWrite: 0.5, cacheRead: 0.04, output: 2.4 },
   "gpt-5.6-sol": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 60 },
   "gpt-5.6-terra": { input: 4, cacheWrite: 5, cacheRead: 0.4, output: 24 },
-  "grok-4.5": { input: 4, cacheWrite: 0, cacheRead: 1, output: 18 },
+  "grok-4.5": { input: 4, cacheWrite: 0, cacheRead: 1, output: 12 },
+  "grok-4.6": { input: 4, cacheWrite: 0, cacheRead: 1, output: 12 },
 };
 
 const LONG_CONTEXT_RATES: Record<string, TokenRates> = {
