@@ -7,13 +7,10 @@
   "packages": [
     "git:github.com/ttttmr/pi-wakatime",
     "git:github.com/ShpetimA/pi-fff",
-    "git:github.com/nicobailon/pi-web-access",
-    "git:github.com/MasuRii/pi-rtk-optimizer",
     "git:github.com/algal/pi-openai-server-compaction",
     "git:github.com/edxeth/pi-auto-session-titles",
     "git:github.com/yusukeshib/pi-datetime",
     "git:github.com/peterp/pi-sidequest",
-    "git:github.com/nicobailon/pi-mcp-adapter",
     "git:github.com/tintinweb/pi-subagents",
     "git:github.com/fitchmultz/pi-cursor-sdk",
     "git:github.com/earendil-works/pi-transcribe",
