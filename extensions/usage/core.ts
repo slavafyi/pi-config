@@ -7,6 +7,7 @@ export interface UsageWindow {
 export interface UsageEntry {
   provider: string;
   source: string;
+  cursorModels?: string[];
   usage?: {
     primary: UsageWindow | null;
     secondary: UsageWindow | null;
@@ -99,6 +100,12 @@ function readEntry(value: unknown): UsageEntry {
     provider: readString(value.provider, "entry.provider"),
     source: readString(value.source, "entry.source"),
   };
+  if (value.cursorModels !== undefined) {
+    if (!Array.isArray(value.cursorModels) || value.cursorModels.some((model) => typeof model !== "string")) {
+      throw new Error("invalid entry.cursorModels");
+    }
+    entry.cursorModels = value.cursorModels;
+  }
   if (value.usage !== undefined && value.usage !== null) {
     if (!isRecord(value.usage)) throw new Error("invalid entry.usage");
     entry.usage = {
@@ -129,6 +136,136 @@ export function parseUsageReport(text: string): UsageReport {
     throw new Error("duplicate usage provider");
   }
   return entries;
+}
+
+function readFiniteNumber(value: unknown, field: string): number {
+  const number = typeof value === "string" && value.trim() ? Number(value) : value;
+  if (typeof number !== "number" || !Number.isFinite(number)) throw new Error(`invalid ${field}`);
+  return number;
+}
+
+function directWindow(value: unknown, field: string): UsageWindow | null {
+  if (value === null || value === undefined) return null;
+  if (!isRecord(value)) throw new Error(`invalid ${field}`);
+  const usedPercent = readFiniteNumber(value.used_percent, `${field}.used_percent`);
+  const windowSeconds = readFiniteNumber(
+    value.limit_window_seconds,
+    `${field}.limit_window_seconds`,
+  );
+  if (usedPercent < 0 || usedPercent > 100 || windowSeconds <= 0) {
+    throw new Error(`invalid ${field}`);
+  }
+  const resetAt = value.reset_at === undefined
+    ? undefined
+    : readFiniteNumber(value.reset_at, `${field}.reset_at`);
+  const resetsAt = resetAt === undefined
+    ? undefined
+    : new Date(resetAt > 1_000_000_000_000 ? resetAt : resetAt * 1_000).toISOString();
+  return {
+    usedPercent,
+    windowMinutes: Math.ceil(windowSeconds / 60),
+    ...(resetsAt ? { resetsAt } : {}),
+  };
+}
+
+export function parseCodexUsagePayload(text: string): UsageReport {
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value) || !isRecord(value.rate_limit)) {
+    throw new Error("invalid Codex usage payload");
+  }
+  const entry: UsageEntry = {
+    provider: "codex",
+    source: "oauth",
+    usage: {
+      primary: directWindow(value.rate_limit.primary_window, "rate_limit.primary_window"),
+      secondary: directWindow(value.rate_limit.secondary_window, "rate_limit.secondary_window"),
+      tertiary: null,
+    },
+  };
+  if (!entry.usage?.primary && !entry.usage?.secondary) {
+    throw new Error("Codex usage payload has no windows");
+  }
+  return [entry];
+}
+
+function cursorPercent(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  const number = readFiniteNumber(value, field);
+  if (number < 0) throw new Error(`invalid ${field}`);
+  return Math.min(100, number);
+}
+
+export function parseCursorUsagePayload(text: string): UsageReport {
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value) || !isRecord(value.planUsage)) {
+    throw new Error("invalid Cursor usage payload");
+  }
+  const start = readFiniteNumber(value.billingCycleStart, "billingCycleStart");
+  const end = readFiniteNumber(value.billingCycleEnd, "billingCycleEnd");
+  const startMs = start < 1_000_000_000_000 ? start * 1_000 : start;
+  const endMs = end < 1_000_000_000_000 ? end * 1_000 : end;
+  const windowMinutes = Math.ceil((endMs - startMs) / 60_000);
+  if (windowMinutes <= 0) throw new Error("invalid Cursor billing cycle");
+  const resetsAt = new Date(endMs).toISOString();
+  const window = (usedPercent: number | undefined): UsageWindow | null =>
+    usedPercent === undefined ? null : { usedPercent, windowMinutes, resetsAt };
+  const total = cursorPercent(value.planUsage.totalPercentUsed, "planUsage.totalPercentUsed");
+  const cursor = cursorPercent(value.planUsage.autoPercentUsed, "planUsage.autoPercentUsed");
+  const other = cursorPercent(value.planUsage.apiPercentUsed, "planUsage.apiPercentUsed");
+  if (total === undefined && cursor === undefined && other === undefined) {
+    throw new Error("Cursor usage payload has no percentages");
+  }
+  const cursorModels = Array.isArray(value.autoBucketModels)
+    ? value.autoBucketModels.filter((model): model is string => typeof model === "string")
+    : [];
+  return [{
+    provider: "cursor",
+    source: "cursor-agent",
+    ...(cursorModels.length ? { cursorModels } : {}),
+    usage: {
+      primary: window(total),
+      secondary: window(cursor),
+      tertiary: window(other),
+    },
+  }];
+}
+
+function headerNumber(
+  headers: Record<string, string | undefined>,
+  name: string,
+): number | undefined {
+  const value = headers[name];
+  if (value === undefined) return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+export function parseCodexRateLimitHeaders(
+  headers: Record<string, string | undefined>,
+): UsageReport | undefined {
+  const readHeaderWindow = (key: "primary" | "secondary"): UsageWindow | null => {
+    const usedPercent = headerNumber(headers, `x-codex-${key}-used-percent`);
+    const windowMinutes = headerNumber(headers, `x-codex-${key}-window-minutes`);
+    if (usedPercent === undefined || windowMinutes === undefined) return null;
+    if (usedPercent < 0 || usedPercent > 100 || windowMinutes <= 0) return null;
+    const resetAt = headerNumber(headers, `x-codex-${key}-reset-at`);
+    const resetsAt = resetAt === undefined
+      ? undefined
+      : new Date(resetAt > 1_000_000_000_000 ? resetAt : resetAt * 1_000).toISOString();
+    return {
+      usedPercent,
+      windowMinutes,
+      ...(resetsAt ? { resetsAt } : {}),
+    };
+  };
+  const primary = readHeaderWindow("primary");
+  const secondary = readHeaderWindow("secondary");
+  if (!primary && !secondary) return undefined;
+  return [{
+    provider: "codex",
+    source: "response-headers",
+    usage: { primary, secondary, tertiary: null },
+  }];
 }
 
 function formatReset(resetsAt: string | undefined, now: Date): string | undefined {
@@ -184,11 +321,23 @@ export function normalizeCursorModelId(modelId: string): NormalizedModel {
 
 export type CursorPool = "Cursor" | "Other" | "Total";
 
-export function preferredCursorPool(modelId: string): CursorPool {
+export function preferredCursorPool(
+  modelId: string,
+  cursorModels?: readonly string[],
+): CursorPool {
   const { base } = normalizeCursorModelId(modelId);
   if (base === "auto" || base === "auto-smart" || base === "default") return "Total";
-  if (base.startsWith("composer-") || base === "grok-4.5" || base === "grok-4.6") {
+  if (
+    base.startsWith("composer-") ||
+    base.startsWith("cursor-grok-") ||
+    base === "grok-4.5" ||
+    base === "grok-4.6"
+  ) {
     return "Cursor";
+  }
+  if (cursorModels) {
+    const normalized = new Set(cursorModels.map((model) => normalizeCursorModelId(model).base));
+    return normalized.has(base) ? "Cursor" : "Other";
   }
   return "Other";
 }
@@ -198,7 +347,7 @@ export function selectCursorQuota(
   modelId: string,
   now = new Date(),
 ): QuotaStatus | undefined {
-  const preferredPool = preferredCursorPool(modelId);
+  const preferredPool = preferredCursorPool(modelId, entry.cursorModels);
   const candidates: Array<[UsageWindow | null | undefined, string]> =
     preferredPool === "Cursor"
       ? [

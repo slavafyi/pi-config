@@ -6,29 +6,27 @@ assistant messages. The custom footer normalizes and displays that status.
 
 ## Setup
 
-Install the [CodexBar](https://github.com/steipete/CodexBar) CLI:
+No separate usage CLI is required.
+
+OpenAI Codex uses the OAuth account configured through Pi `/login`. Cursor uses
+the account configured through `cursor-agent`:
 
 ```sh
-# Homebrew on macOS or Linux
-brew install steipete/tap/codexbar
-
-# Arch Linux
-# yay -S codexbar-cli
-
-codexbar --version
+cursor-agent login
+cursor-agent whoami
 ```
 
-OpenAI uses `~/.codex/auth.json`. Cursor uses the existing cursor.com browser
-session; automatic resolution tries cached cookies, supported browsers, legacy
-sessions, and Cursor IDE auth in that order. No Cursor IDE is required when a
-Firefox session is available.
+Cursor Agent credentials are resolved from its native store:
 
-```sh
-codexbar usage --provider codex --source auto --format json
-codexbar usage --provider cursor --source auto --format json
-```
+- macOS: Login Keychain entry `cursor-access-token` for `cursor-user`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/cursor/auth.json`
+- macOS with `AGENT_CLI_CREDENTIAL_STORE=file`: `~/.cursor/auth.json`
 
-Reload Pi after setup:
+`CURSOR_AUTH_TOKEN` is also accepted when it is already present in Pi's
+environment. The extension does not inspect browser cookies and does not store
+provider credentials.
+
+Reload Pi after changing credentials:
 
 ```text
 /reload
@@ -36,13 +34,25 @@ Reload Pi after setup:
 
 ## Status
 
-The extension refreshes on startup, model changes, and completed turns when a
-UI is available. When no status is available, a request that takes longer than
-150 milliseconds shows a spinner; faster requests never flash one. Later
-refreshes keep the current status visible instead of restarting the spinner.
-Headless sessions skip CodexBar quota requests but still add Cursor cost
-estimates. It uses a 30-second cache, deduplicates concurrent requests, and
-keeps the last good value through temporary failures.
+The extension reads the last successful snapshot from `usage-cache.json` in
+`PI_CODING_AGENT_DIR`, displays it immediately, and refreshes stale data in the
+background. The cache contains normalized quota data only, is written with mode
+`0600`, and never contains access or refresh tokens.
+
+OpenAI Codex calls ChatGPT's `/backend-api/wham/usage` endpoint directly. It also
+updates the cached snapshot from rate-limit headers on normal Codex responses,
+so completed turns do not require another quota request.
+
+Cursor reads the Cursor Agent access token and calls
+`DashboardService/GetCurrentPeriodUsage` directly. The response supplies the
+billing-cycle reset and separate Total, Cursor Models, and Other Models usage
+percentages. Credentials are re-resolved once after an authentication failure.
+
+The network cache lasts five minutes, concurrent requests are deduplicated, and
+the last good value remains visible through temporary failures. When no cached
+status is available, a request that takes longer than 150 milliseconds shows a
+spinner. Headless sessions skip quota requests but still add Cursor cost
+estimates.
 
 The extension publishes the compact display form directly:
 
@@ -56,25 +66,17 @@ The window and reset are dim. The remaining percentage is accent above 25%,
 warning from 11% through 25%, and error at 10% or below. The custom footer
 preserves those ANSI colors while positioning and truncating the status
 responsively. When the footer is invalidated, the extension restyles its saved
-semantic status with the current theme without running CodexBar again.
+semantic status with the current theme without making another request.
 
-OpenAI prefers the weekly Codex window. Cursor shows `cursor` for Cursor Models
-(Composer and Grok) and `other` for explicitly selected third-party models.
-Router/Auto shows `total` because its selected model can change between turns.
-When the preferred category is unavailable, the extension falls back to Total
-and then the remaining category. It never combines pools or displays balances,
-spend caps, or on-demand state.
+OpenAI prefers the weekly Codex window. Cursor shows `cursor` for models listed
+by Cursor in its automatic model bucket and `other` for explicitly selected
+third-party models. Router/Auto shows `total` because its selected model can
+change between turns. When the preferred category is unavailable, the
+extension falls back to Total and then the remaining category. It never
+combines pools or displays balances, spend caps, or on-demand state.
 
 Missing credentials show `OpenAI: unavailable` or `Cursor: unavailable` without
-interrupting Pi. Unsupported Pi providers clear the status. CodexBar also
-supports Kimi, Z.ai/GLM, Alibaba Coding Plan, and Qwen Cloud directly:
-
-```sh
-codexbar usage --provider kimi --format json
-codexbar usage --provider zai --format json
-codexbar usage --provider alibaba-coding-plan --format json
-codexbar usage --provider qwen-cloud --format json
-```
+interrupting Pi. Unsupported Pi providers clear the status.
 
 ## Tokens and Cursor cost estimate
 
@@ -100,11 +102,11 @@ remain at zero rather than receiving a guessed charge.
 ## Troubleshooting
 
 ```sh
-codexbar cache clear --cookies --provider cursor
-codexbar cookie refresh --provider cursor
-codex login
+cursor-agent whoami
+cursor-agent login
 ```
 
-A malformed, unavailable, or slow CodexBar response is ignored and does not
-interrupt Pi turns. Browser-cookie access may require the permissions described
-by CodexBar for that browser.
+On macOS, Keychain may ask for access the first time Pi reads the Cursor Agent
+entry. On Linux, confirm that the Cursor Agent auth file exists and remains
+readable only by the current user. A malformed, unavailable, or slow provider
+response is ignored and does not interrupt Pi turns.
