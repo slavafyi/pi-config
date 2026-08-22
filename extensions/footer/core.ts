@@ -3,7 +3,6 @@ const CONTROL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001a\u001c-\u001f\u0
 
 export const KNOWN_STATUS_IDS = new Set([
   "usage",
-  "cache-timer",
   "mcp",
   "subagents",
   "plan-mode",
@@ -37,8 +36,6 @@ export interface ContextLike {
 export interface FooterMetrics {
   quota?: string;
   quotaStyled?: string;
-  cacheTimer?: string;
-  cacheTimerStyled?: string;
   cacheHitPercent?: number;
   context?: ContextLike;
   cost: number;
@@ -47,8 +44,6 @@ export interface FooterMetrics {
 export interface KnownStatuses {
   usage?: string;
   usageStyled?: string;
-  cacheTimer?: string;
-  cacheTimerStyled?: string;
   mcp?: string;
   agents?: string;
   agentsRunning?: number;
@@ -114,12 +109,6 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI_PATTERN, "");
 }
 
-export function prefixStyledText(styled: string, prefix: string): string {
-  const leadingAnsi = styled.match(/^(?:\x1b\[[0-?]*[ -/]*[@-~])+/)?.[0];
-  if (!leadingAnsi) return `${prefix}${styled}`;
-  return `${leadingAnsi}${prefix}${styled.slice(leadingAnsi.length)}`;
-}
-
 export function sanitizeStatus(text: string): string {
   return text
     .replace(/[\r\n\t]/g, " ")
@@ -151,14 +140,6 @@ export function normalizeUsage(text: string | undefined): string | undefined {
   const match = clean.match(/(?:^|\s)([^\s:]+):\s*(\d+(?:\.\d+)?)%\s*(?:left)?(?:\s*\(?↺\s*(?:in\s*)?([^\s)]+)\)?)?/i);
   if (!match) return clean || undefined;
   return `${match[1]}:${match[2]}%${match[3] ? ` ↺${match[3]}` : ""}`;
-}
-
-export function normalizeCacheTimer(text: string | undefined): string | undefined {
-  if (!text) return undefined;
-  const clean = plainStatus(text).replace(/^cache\s*:?[ ]*/i, "");
-  if (/^expired$/i.test(clean)) return "expired";
-  const match = clean.match(/\b\d+:\d{2}\b/);
-  return match?.[0] ?? (clean || undefined);
 }
 
 export function normalizeMcp(text: string | undefined): { text?: string; error: boolean } {
@@ -205,19 +186,14 @@ export function normalizePlan(text: string | undefined): {
 
 export function normalizeKnownStatuses(known: ReadonlyMap<string, string>): KnownStatuses {
   const usageRaw = known.get("usage");
-  const cacheTimerRaw = known.get("cache-timer");
   const planRaw = known.get("plan-mode");
   const usage = normalizeUsage(usageRaw);
-  const cacheTimer = normalizeCacheTimer(cacheTimerRaw);
   const mcp = normalizeMcp(known.get("mcp"));
   const agents = normalizeAgents(known.get("subagents"));
   const plan = normalizePlan(planRaw);
   return {
     usage,
     usageStyled: usage && usageRaw ? sanitizeStatus(usageRaw) : undefined,
-    cacheTimer,
-    cacheTimerStyled:
-      cacheTimer && cacheTimerRaw ? sanitizeStatus(cacheTimerRaw) : undefined,
     mcp: mcp.text,
     agents: agents.text,
     agentsRunning: agents.running,
@@ -318,7 +294,7 @@ interface VariantState {
   branchOnly: boolean;
   modelCompact: boolean;
   hideHealthyMcp: boolean;
-  hideCacheTimer: boolean;
+  hideCache: boolean;
   hideCost: boolean;
 }
 
@@ -476,40 +452,15 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
     });
   }
 
-  const timer = input.metrics.cacheTimer;
   const hit = input.metrics.cacheHitPercent;
-  if (!state.hideCacheTimer && (timer || hit !== undefined)) {
-    const hitText = hit === undefined
-      ? ""
-      : formatPercent(hit, state.cacheStyle === 0 ? state.percentDigits : 0);
-    let prefix = "";
-    let timerPrefix = "";
-    if (state.cacheStyle === 0) {
-      prefix = `cache:${hitText}${timer && hitText ? " " : ""}`;
-      timerPrefix = timer ? "↺" : "";
-    } else if (state.cacheStyle === 1) {
-      prefix = `C:${hitText}`;
-      timerPrefix = timer ? "/" : "";
-    } else if (timer) {
-      timerPrefix = "↺";
-    }
-
-    if (prefix || timer) {
-      const timerRole = timer === "expired" ? "error" : "cache";
-      const preservedTimer = timer && preservesText(input.metrics.cacheTimerStyled, timer)
-        ? input.metrics.cacheTimerStyled
-        : undefined;
-      const styledTimer = timer
-        ? preservedTimer
-          ? prefixStyledText(preservedTimer, timerPrefix)
-          : styleText(`${timerPrefix}${timer}`, timerRole, input)
-        : "";
-      right.push({
-        text: `${styleText(prefix, "cache", input)}${styledTimer}`,
-        role: "cache",
-        preserveStyle: true,
-      });
-    }
+  if (!state.hideCache && hit !== undefined) {
+    const hitText = formatPercent(hit, state.cacheStyle === 0 ? state.percentDigits : 0);
+    const text = state.cacheStyle === 0
+      ? `cache:${hitText}`
+      : state.cacheStyle === 1
+        ? `C:${hitText}`
+        : hitText;
+    right.push({ text, role: "cache" });
   }
 
   const context = input.metrics.context;
@@ -580,7 +531,7 @@ export function renderFooter(
     branchOnly: false,
     modelCompact: false,
     hideHealthyMcp: false,
-    hideCacheTimer: false,
+    hideCache: false,
     hideCost: false,
   };
 
@@ -599,7 +550,7 @@ export function renderFooter(
     () => { state.branchOnly = true; },
     () => { state.modelCompact = true; },
     () => { state.hideHealthyMcp = true; },
-    () => { state.hideCacheTimer = true; },
+    () => { state.hideCache = true; },
     () => { state.hideCost = true; },
   ];
 

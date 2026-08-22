@@ -6,7 +6,6 @@ import {
   normalizeAgents,
   normalizeKnownStatuses,
   parseFooterConfig,
-  prefixStyledText,
   projectLabel,
   projectName,
   renderFooter,
@@ -72,7 +71,6 @@ function input(overrides: Partial<FooterLayoutInput> = {}): FooterLayoutInput {
     thinking: "medium",
     statuses: {
       usage: "7d:94% ↺5d13h",
-      cacheTimer: "4:23",
       mcp: "MCP:0/2",
       agents: "agents:2",
       plan: "⏸︎ plan",
@@ -82,7 +80,6 @@ function input(overrides: Partial<FooterLayoutInput> = {}): FooterLayoutInput {
     },
     metrics: {
       quota: "7d:94% ↺5d13h",
-      cacheTimer: "4:23",
       cacheHitPercent: 98.1,
       context: { tokens: 32_640, contextWindow: 272_000, percent: 12 },
       cost: 1.134,
@@ -115,12 +112,10 @@ test("classifies fixed status slots independently of Map order", () => {
     ["usage", "7d:94% left (↺in 5d13h)"],
     ["mcp", "🔌 MCP: 0/2"],
     ["subagents", "2 running agents, 1 queued"],
-    ["cache-timer", "4:23"],
   ]));
   const known = normalizeKnownStatuses(classified.known);
   assert.deepEqual(classified.unknown, ["extra"]);
   assert.equal(known.usage, "7d:94% ↺5d13h");
-  assert.equal(known.cacheTimer, "4:23");
   assert.equal(known.mcp, "MCP:0/2");
   assert.equal(known.agents, "agents:2+1q");
   assert.equal(known.plan, "⏸︎ plan");
@@ -182,18 +177,6 @@ test("defaults unknown extension statuses off and parses an explicit opt-in", ()
   });
 });
 
-test("puts cache reset markers inside the timer's ANSI style", () => {
-  assert.equal(prefixStyledText("4:23", "↺"), "↺4:23");
-  assert.equal(
-    prefixStyledText("\x1b[33m4:23\x1b[0m", "↺"),
-    "\x1b[33m↺4:23\x1b[0m",
-  );
-  assert.equal(
-    prefixStyledText("\x1b[1m\x1b[33m4:23\x1b[0m", "↺"),
-    "\x1b[1m\x1b[33m↺4:23\x1b[0m",
-  );
-});
-
 test("calculates full cost and the latest assistant cache hit", () => {
   const usage = (cacheRead: number, cost: number) => ({
     input: 10,
@@ -216,7 +199,7 @@ test("calculates full cost and the latest assistant cache hit", () => {
 test("renders wide, compact, narrow, and minimal layouts by measured width", () => {
   const wide = renderFooter(input(), 180, tools);
   assert.match(wide[0]!, /^pi-config:main  gpt-5\.6-sol:fast\/medium  MCP:0\/2  agents:2  ⏸︎ plan\s+/);
-  assert.ok(wide[0]!.endsWith("7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134"));
+  assert.ok(wide[0]!.endsWith("7d:94% ↺5d13h  cache:98.1%  ctx:12%/272k  $1.134"));
 
   const compact = renderFooter(input(), 110, tools);
   assert.match(compact[0]!, /A(?::)?2/);
@@ -240,19 +223,16 @@ test("keeps tmux branch and compacts model and thinking to a slash form", () => 
 test("preserves owned extension colors inside the responsive layout", () => {
   const quotaStyled =
     "\x1b[2m7d:\x1b[0m\x1b[36m94%\x1b[0m\x1b[2m ↺5d13h\x1b[0m";
-  const timerStyled = "\x1b[33m4:23\x1b[0m";
   const planStyled = "\x1b[33m⏸︎ plan\x1b[0m";
   const owned = input({
     statuses: {
       ...input().statuses,
       usageStyled: quotaStyled,
-      cacheTimerStyled: timerStyled,
       planStyled,
     },
     metrics: {
       ...input().metrics,
       quotaStyled,
-      cacheTimerStyled: timerStyled,
     },
     style(text) {
       return `\x1b[2m${text}\x1b[0m`;
@@ -261,7 +241,6 @@ test("preserves owned extension colors inside the responsive layout", () => {
 
   const wide = renderFooter(owned, 180, tools);
   assert.ok(wide[0]!.includes(quotaStyled));
-  assert.ok(wide[0]!.includes("\x1b[33m↺4:23\x1b[0m"));
   assert.ok(wide[0]!.includes(planStyled));
   assertWidths(wide, 180);
 
@@ -354,7 +333,6 @@ test("preserves active and critical statuses before optional metrics", () => {
     model: "a-very-long-model-name",
     statuses: {
       usage: "7d:9% ↺2h",
-      cacheTimer: "expired",
       mcp: "MCP:error auth",
       agents: "agents:2+1q",
       plan: "⏸︎ plan",
@@ -364,7 +342,6 @@ test("preserves active and critical statuses before optional metrics", () => {
     },
     metrics: {
       quota: "7d:9% ↺2h",
-      cacheTimer: "expired",
       cacheHitPercent: 10,
       context: { tokens: 250_000, contextWindow: 272_000, percent: 92 },
       cost: 99.999,
