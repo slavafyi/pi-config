@@ -97,7 +97,7 @@ Only three global custom agents are enabled:
 All profiles set `persist_session: true` and load only the `usage` extension.
 That extension registers no tools, so their tool lists remain exact built-in
 allowlists. In headless sessions it records Cursor cost estimates without
-starting CodexBar quota requests. The profiles do not pin model, thinking,
+starting provider quota requests. The profiles do not pin model, thinking,
 background mode, context inheritance, or filesystem isolation. `reviewer` may
 use `bash` for tests but is instructed not to modify files.
 

@@ -6,6 +6,9 @@ import {
   formatQuotaStatus,
   isAuthenticationError,
   normalizeCursorModelId,
+  parseCodexRateLimitHeaders,
+  parseCodexUsagePayload,
+  parseCursorUsagePayload,
   parseUsageReport,
   patchCursorMessageCost,
   quotaPercentTone,
@@ -42,7 +45,7 @@ function message(provider = "cursor") {
   };
 }
 
-test("parses the supported CodexBar usage shape strictly", () => {
+test("parses the normalized usage shape strictly", () => {
   assert.deepEqual(
     fixture.map(({ provider }) => provider),
     ["codex", "cursor"],
@@ -55,6 +58,56 @@ test("parses the supported CodexBar usage shape strictly", () => {
       ),
     /usedPercent/,
   );
+});
+
+test("normalizes direct Codex usage and response headers", () => {
+  const payload = parseCodexUsagePayload(JSON.stringify({
+    rate_limit: {
+      primary_window: {
+        used_percent: 12,
+        limit_window_seconds: 18_000,
+        reset_at: 1_786_500_000,
+      },
+      secondary_window: {
+        used_percent: 34,
+        limit_window_seconds: 604_800,
+        reset_at: 1_786_800_000,
+      },
+    },
+  }));
+  assert.equal(payload[0]?.usage?.primary?.windowMinutes, 300);
+  assert.equal(payload[0]?.usage?.secondary?.usedPercent, 34);
+
+  const headers = parseCodexRateLimitHeaders({
+    "x-codex-primary-used-percent": "12",
+    "x-codex-primary-window-minutes": "300",
+    "x-codex-primary-reset-at": "1786500000",
+    "x-codex-secondary-used-percent": "34",
+    "x-codex-secondary-window-minutes": "10080",
+    "x-codex-secondary-reset-at": "1786800000",
+  });
+  assert.deepEqual(headers?.[0]?.usage, payload[0]?.usage);
+});
+
+test("normalizes Cursor Agent billing pools", () => {
+  const report = parseCursorUsagePayload(JSON.stringify({
+    billingCycleStart: "1786395882000",
+    billingCycleEnd: "1789074282000",
+    planUsage: {
+      totalPercentUsed: 9.3,
+      autoPercentUsed: 0.4,
+      apiPercentUsed: 68.6,
+    },
+    autoBucketModels: ["composer-2.5", "grok-4.5"],
+  }));
+  const entry = report[0];
+  assert.equal(entry?.source, "cursor-agent");
+  assert.equal(entry?.usage?.primary?.usedPercent, 9.3);
+  assert.equal(entry?.usage?.secondary?.usedPercent, 0.4);
+  assert.equal(entry?.usage?.tertiary?.usedPercent, 68.6);
+  assert.equal(entry?.usage?.primary?.windowMinutes, 44_640);
+  assert.equal(selectCursorQuota(entry!, "grok-4.5")?.pool, "cursor");
+  assert.equal(selectCursorQuota(entry!, "grok-4.6")?.pool, "other");
 });
 
 const now = new Date("2026-08-11T10:00:00Z");

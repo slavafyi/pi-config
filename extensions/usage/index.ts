@@ -1,34 +1,141 @@
+import { Buffer } from "node:buffer";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { readUsageCache, writeUsageCache, type UsageCache } from "./cache.ts";
 import {
   isAuthenticationError,
-  parseUsageReport,
+  parseCodexRateLimitHeaders,
+  parseCodexUsagePayload,
+  parseCursorUsagePayload,
   patchCursorMessageCost,
-  preferredCursorPool,
   selectQuota,
   styleQuotaStatus,
   type QuotaStatus,
   type UsageReport,
 } from "./core.ts";
+import { resolveCursorAccessToken } from "./credentials.ts";
 import { FOOTER_INVALIDATE_EVENT } from "../footer/events.ts";
 
-// The custom footer places known statuses in fixed slots.
 const STATUS_ID = "usage";
-const TTL_MS = 30_000;
-const CLI_TIMEOUT_MS = 25_000;
+const TTL_MS = 5 * 60_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 const SPINNER_DELAY_MS = 150;
 const SPINNER_INTERVAL_MS = 100;
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const CODEXBAR_PROVIDERS: Record<string, string> = {
+const USAGE_PROVIDERS: Record<string, string> = {
   "openai-codex": "codex",
   cursor: "cursor",
 };
-
+const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
+const CURSOR_USAGE_URL =
+  "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage";
 type UsageDisplay =
   | { type: "quota"; quota: QuotaStatus }
   | { type: "unavailable"; provider: string }
   | { type: "spinner"; frame: string };
 
-export default function usage(pi: ExtensionAPI) {
+function codexAccountId(token: string): string {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) throw new Error("invalid token");
+    const payload = JSON.parse(Buffer.from(parts[1]!, "base64url").toString("utf8")) as Record<
+      string,
+      unknown
+    >;
+    const claim = payload["https://api.openai.com/auth"];
+    if (!claim || typeof claim !== "object" || Array.isArray(claim)) throw new Error("missing claim");
+    const accountId = (claim as { chatgpt_account_id?: unknown }).chatgpt_account_id;
+    if (typeof accountId !== "string" || !accountId) throw new Error("missing account id");
+    return accountId;
+  } catch {
+    throw new Error("OpenAI authentication is unavailable");
+  }
+}
+
+async function fetchUsageJson(
+  url: string,
+  init: RequestInit,
+): Promise<{ status: number; text: string }> {
+  const response = await fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  const text = await response.text();
+  return { status: response.status, text };
+}
+
+async function fetchCodexUsage(ctx: ExtensionContext): Promise<UsageReport> {
+  const resolved = await ctx.modelRegistry.getProviderAuth("openai-codex");
+  const token = resolved?.auth.apiKey;
+  if (!token) throw new Error("OpenAI authentication is unavailable");
+  if (resolved.auth.baseUrl && new URL(resolved.auth.baseUrl).origin !== "https://chatgpt.com") {
+    throw new Error("OpenAI Codex usage does not support proxy credentials");
+  }
+  const result = await fetchUsageJson(CODEX_USAGE_URL, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "ChatGPT-Account-Id": codexAccountId(token),
+      "User-Agent": "pi-usage",
+    },
+  });
+  if (result.status === 401 || result.status === 403) {
+    throw new Error("OpenAI authentication is unavailable");
+  }
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`OpenAI usage returned HTTP ${result.status}`);
+  }
+  return parseCodexUsagePayload(result.text);
+}
+
+async function fetchCursorUsage(pi: ExtensionAPI): Promise<UsageReport> {
+  const resolveToken = () =>
+    resolveCursorAccessToken({
+      exec: async (command, args) => pi.exec(command, args, { timeout: 3_000 }),
+    });
+  let token = await resolveToken();
+  if (!token) throw new Error("Cursor authentication is unavailable");
+  let result = await fetchUsageJson(CURSOR_USAGE_URL, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "Connect-Protocol-Version": "1",
+      "Content-Type": "application/json",
+      "User-Agent": "pi-usage",
+    },
+    body: "{}",
+  });
+  if (result.status === 401 || result.status === 403) {
+    token = await resolveToken();
+    if (!token) throw new Error("Cursor authentication is unavailable");
+    result = await fetchUsageJson(CURSOR_USAGE_URL, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+        "Connect-Protocol-Version": "1",
+        "Content-Type": "application/json",
+        "User-Agent": "pi-usage",
+      },
+      body: "{}",
+    });
+  }
+  if (result.status === 401 || result.status === 403) {
+    throw new Error("Cursor authentication is unavailable");
+  }
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Cursor usage returned HTTP ${result.status}`);
+  }
+  return parseCursorUsagePayload(result.text);
+}
+
+export default async function usage(pi: ExtensionAPI) {
+  const cachePath = join(
+    process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"),
+    "usage-cache.json",
+  );
   let activeCtx: ExtensionContext | undefined;
   let generation = 0;
   let display: UsageDisplay | undefined;
@@ -37,47 +144,41 @@ export default function usage(pi: ExtensionAPI) {
   let hasRenderedStatus = false;
   let spinnerDelay: ReturnType<typeof setTimeout> | undefined;
   let spinnerInterval: ReturnType<typeof setInterval> | undefined;
-  const cache = new Map<string, { report: UsageReport; fetchedAt: number }>();
+  const stored = await readUsageCache(cachePath);
+  const cache = new Map<string, { report: UsageReport; fetchedAt: number }>(Object.entries(stored));
   const inFlight = new Map<string, Promise<UsageReport>>();
   const lastQuota = new Map<string, QuotaStatus>();
+  let cacheWrite = Promise.resolve();
 
   function quotaKey(provider: string, modelId: string): string {
-    return provider === "cursor" ? `cursor:${preferredCursorPool(modelId)}` : provider;
+    return provider === "cursor" ? `cursor:${modelId}` : provider;
   }
 
-  async function loadReport(provider: string): Promise<UsageReport> {
+  function persistCache() {
+    const snapshot: UsageCache = Object.fromEntries(cache);
+    cacheWrite = cacheWrite
+      .catch(() => undefined)
+      .then(() => writeUsageCache(cachePath, snapshot));
+  }
+
+  function saveReport(provider: string, report: UsageReport) {
+    cache.set(provider, { report, fetchedAt: Date.now() });
+    persistCache();
+  }
+
+  async function loadReport(provider: string, ctx: ExtensionContext): Promise<UsageReport> {
     const cached = cache.get(provider);
     if (cached && Date.now() - cached.fetchedAt < TTL_MS) return cached.report;
     const pending = inFlight.get(provider);
     if (pending) return pending;
-    const request = (async () => {
-      const result = await pi.exec(
-        "codexbar",
-        [
-          "usage",
-          "--provider",
-          provider,
-          "--source",
-          provider === "codex" ? "oauth" : "auto",
-          "--format",
-          "json",
-          "--json-only",
-          "--web-timeout",
-          "20",
-          "--log-level",
-          "error",
-        ],
-        { timeout: CLI_TIMEOUT_MS },
-      );
-      if (result.killed || !result.stdout.trim()) {
-        throw new Error(result.killed ? "CodexBar timed out" : "CodexBar returned no JSON");
-      }
-      const report = parseUsageReport(result.stdout);
-      cache.set(provider, { report, fetchedAt: Date.now() });
-      return report;
-    })().finally(() => {
-      inFlight.delete(provider);
-    });
+    const request = (provider === "codex" ? fetchCodexUsage(ctx) : fetchCursorUsage(pi))
+      .then((report) => {
+        saveReport(provider, report);
+        return report;
+      })
+      .finally(() => {
+        inFlight.delete(provider);
+      });
     inFlight.set(provider, request);
     return request;
   }
@@ -156,13 +257,19 @@ export default function usage(pi: ExtensionAPI) {
     setDisplay(ctx, key, { type: "unavailable", provider });
   }
 
+  function cachedQuota(provider: string, modelId: string): QuotaStatus | undefined {
+    const source = USAGE_PROVIDERS[provider];
+    const report = source ? cache.get(source)?.report : undefined;
+    return report ? selectQuota(report, provider, modelId).quota : undefined;
+  }
+
   async function refresh(ctx: ExtensionContext) {
     if (!ctx.hasUI) return;
     const requestGeneration = ++generation;
     const provider = ctx.model?.provider;
     const modelId = ctx.model?.id ?? "";
-    const codexBarProvider = provider ? CODEXBAR_PROVIDERS[provider] : undefined;
-    if (!provider || !codexBarProvider) {
+    const usageProvider = provider ? USAGE_PROVIDERS[provider] : undefined;
+    if (!provider || !usageProvider) {
       stopSpinner();
       setDisplay(ctx, undefined, undefined);
       return;
@@ -171,7 +278,7 @@ export default function usage(pi: ExtensionAPI) {
     const key = quotaKey(provider, modelId);
     if (displayKey !== key) {
       stopSpinner();
-      const stale = lastQuota.get(key);
+      const stale = lastQuota.get(key) ?? cachedQuota(provider, modelId);
       if (stale) showQuota(ctx, key, stale);
       else {
         setDisplay(ctx, key, undefined);
@@ -182,7 +289,7 @@ export default function usage(pi: ExtensionAPI) {
     }
 
     try {
-      const report = await loadReport(codexBarProvider);
+      const report = await loadReport(usageProvider, ctx);
       if (!isCurrentRequest(ctx, key, requestGeneration)) return;
       const selected = selectQuota(report, provider, ctx.model?.id ?? modelId);
       if (selected.quota) {
@@ -195,12 +302,12 @@ export default function usage(pi: ExtensionAPI) {
         showUnavailable(ctx, key, provider);
         return;
       }
-      const stale = lastQuota.get(key);
+      const stale = lastQuota.get(key) ?? cachedQuota(provider, modelId);
       if (stale) showQuota(ctx, key, stale);
       else showUnavailable(ctx, key, provider);
     } catch {
       if (!isCurrentRequest(ctx, key, requestGeneration)) return;
-      const stale = lastQuota.get(key);
+      const stale = lastQuota.get(key) ?? cachedQuota(provider, modelId);
       if (stale) showQuota(ctx, key, stale);
       else showUnavailable(ctx, key, provider);
     }
@@ -208,6 +315,18 @@ export default function usage(pi: ExtensionAPI) {
 
   const unsubscribeInvalidate = pi.events.on(FOOTER_INVALIDATE_EVENT, () => {
     if (activeCtx) publishStatus(activeCtx);
+  });
+
+  pi.on("after_provider_response", (event, ctx) => {
+    if (ctx.model?.provider !== "openai-codex") return;
+    const report = parseCodexRateLimitHeaders(event.headers);
+    if (!report) return;
+    saveReport("codex", report);
+    const selected = selectQuota(report, "openai-codex", ctx.model.id);
+    if (!selected.quota || activeCtx !== ctx) return;
+    const key = quotaKey("openai-codex", ctx.model.id);
+    lastQuota.set(key, selected.quota);
+    showQuota(ctx, key, selected.quota);
   });
 
   pi.on("message_end", (event) => {
@@ -236,7 +355,7 @@ export default function usage(pi: ExtensionAPI) {
     void refresh(ctx);
   });
 
-  pi.on("session_shutdown", (_event, ctx) => {
+  pi.on("session_shutdown", async (_event, ctx) => {
     generation += 1;
     stopSpinner();
     display = undefined;
@@ -246,5 +365,6 @@ export default function usage(pi: ExtensionAPI) {
     publishStatus(ctx);
     renderedStatus = undefined;
     hasRenderedStatus = false;
+    await cacheWrite.catch(() => undefined);
   });
 }

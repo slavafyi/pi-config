@@ -4,3 +4,4 @@ auth.json
 git
 trust.json
 models-store.json
+usage-cache.json
