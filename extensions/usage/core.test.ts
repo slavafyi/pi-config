@@ -107,7 +107,15 @@ test("normalizes Cursor Agent billing pools", () => {
   assert.equal(entry?.usage?.tertiary?.usedPercent, 68.6);
   assert.equal(entry?.usage?.primary?.windowMinutes, 44_640);
   assert.equal(selectCursorQuota(entry!, "grok-4.5")?.pool, "cursor");
-  assert.equal(selectCursorQuota(entry!, "grok-4.6")?.pool, "other");
+  for (const model of [
+    "cursor-grok-4.6",
+    "cursor-grok-4.6-fast",
+    "cursor-grok-4.6-high",
+    "cursor-grok-4.6-high-fast",
+  ]) {
+    assert.equal(selectCursorQuota(entry!, model)?.pool, "cursor", model);
+  }
+  assert.equal(selectCursorQuota(entry!, "claude-opus-5-high")?.pool, "other");
 });
 
 const now = new Date("2026-08-11T10:00:00Z");

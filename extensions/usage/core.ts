@@ -327,12 +327,17 @@ export function preferredCursorPool(
 ): CursorPool {
   const { base } = normalizeCursorModelId(modelId);
   if (base === "auto" || base === "auto-smart" || base === "default") return "Total";
+  if (
+    base.startsWith("composer-") ||
+    base.startsWith("cursor-grok-") ||
+    base === "grok-4.5" ||
+    base === "grok-4.6"
+  ) {
+    return "Cursor";
+  }
   if (cursorModels) {
     const normalized = new Set(cursorModels.map((model) => normalizeCursorModelId(model).base));
     return normalized.has(base) ? "Cursor" : "Other";
-  }
-  if (base.startsWith("composer-") || base === "grok-4.5" || base === "grok-4.6") {
-    return "Cursor";
   }
   return "Other";
 }
