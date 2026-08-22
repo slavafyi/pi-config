@@ -14,6 +14,7 @@
     "git:github.com/tintinweb/pi-subagents@3f9d35cd078d18a141eb5a6d8f4fc5010d756280",
     "git:github.com/fitchmultz/pi-cursor-sdk@a8fecf19a342ea40c90731653ec6ec6bbb8a4f32",
     "git:github.com/earendil-works/pi-transcribe@e4c1b04c9a383a0b95c2ef7bbd8d39cf90437ec1",
+    "git:github.com/dimk90/pi-context-view@b283f1b438fb30ca163824c10725d6231605a1f9",
     "npm:@ogulcancelik/pi-session-recall@1.0.6"
   ],
   "theme": "koda-light/koda-dark",
