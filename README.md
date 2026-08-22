@@ -5,22 +5,53 @@ extensions, packages, and themes that shape my coding workflow.
 
 ## Setup
 
+### Environment variables
+
+This setup keeps Pi's configuration outside its default location. Set these
+variables in your shell environment:
+
+```bash
+export PI_CONFIG_DIR="${PI_CONFIG_DIR:-$HOME/.config/pi}"
+export PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-$PI_CONFIG_DIR/agent}"
+export PARALLEL_API_KEY="<your-key>"
+```
+
+`PI_CODING_AGENT_DIR` is derived from `PI_CONFIG_DIR` and points to this
+repository. Keep `PARALLEL_API_KEY` in a local secrets store and outside Git.
+
 ### Fresh machine
 
 ```bash
-# 1. Install Pi
-pnpm install -g @earendil-works/pi-coding-agent
+# 1. Install Pi and tools
+pnpm install -g \
+  @earendil-works/pi-coding-agent parallel-web-cli @playwright/cli@latest
 
-# 2. Clone this repository as the agent configuration
-mkdir -p ~/.config/pi
-git clone git@github.com:slavafyi/pi-config.git ~/.config/pi/agent
+# 2. Install skills
+pnpx skills add microsoft/playwright-cli \
+  --global \
+  --agent universal \
+  --skill playwright-cli \
+  --yes
+pnpx skills add parallel-web/parallel-agent-skills \
+  --global \
+  --agent universal \
+  --skill "*" \
+  --yes
 
-# 3. Install the configured packages
+# 3. Clone this repository as the agent configuration
+mkdir -p "$(dirname "$PI_CODING_AGENT_DIR")"
+git clone git@github.com:slavafyi/pi-config.git "$PI_CODING_AGENT_DIR"
+
+# 4. Install the configured packages
 pi update --extensions
 
-# 4. Start Pi and use /login to configure a provider
+# 5. Start Pi and use /login to configure a provider
 pi
 ```
+
+This configuration uses Parallel for web search and Playwright for browser
+work. Both integrations use CLI skills instead of MCP servers to keep tool
+context and token usage low.
 
 Credentials, sessions, installed package checkouts, and trust decisions are
 excluded from Git.
@@ -28,7 +59,7 @@ excluded from Git.
 ### Updating
 
 ```bash
-cd ~/.config/pi/agent
+cd "$PI_CODING_AGENT_DIR"
 git pull
 pi update --extensions
 ```
