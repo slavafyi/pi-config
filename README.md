@@ -48,7 +48,6 @@ of one. Pi's default agents are disabled in favor of these definitions.
 
 | Extension | What it provides |
 |-----------|------------------|
-| `cache-timer` | Cache-expiry countdown for GPT-5.6 and Claude; unsupported Cursor models stay hidden |
 | `footer` | Responsive project, model, extension-status, quota, cache, context, and cost footer |
 | `plan-mode` | Read-only planning with cache-preserving execution transitions |
 | `usage` | Codex and Cursor quota status and Cursor cost estimates |
@@ -56,19 +55,16 @@ of one. Pi's default agents are disabled in favor of these definitions.
 
 ## Packages
 
-Packages are declared in `settings.json` and managed by Pi.
+Packages are declared in `settings.json` and pinned to immutable git commits or exact npm versions.
 
 | Package | Purpose |
 |---------|---------|
 | [pi-wakatime](https://github.com/ttttmr/pi-wakatime) | WakaTime activity tracking |
 | [pi-fff](https://github.com/ShpetimA/pi-fff) | Fast file and content search tools |
-| [pi-web-access](https://github.com/nicobailon/pi-web-access) | Web search and content extraction |
-| [pi-rtk-optimizer](https://github.com/MasuRii/pi-rtk-optimizer) | Command and tool-output optimization |
-| [pi-openai-server-compaction](https://github.com/algal/pi-openai-server-compaction) | OpenAI server-side context compaction |
+| [pi-openai-server-compaction](https://github.com/algal/pi-openai-server-compaction) | OpenAI server-side context compaction with the pending [usage-reporting fix](https://github.com/algal/pi-openai-server-compaction/pull/15) |
 | [pi-auto-session-titles](https://github.com/edxeth/pi-auto-session-titles) | Automatic session titles |
 | [pi-datetime](https://github.com/yusukeshib/pi-datetime) | Date and time context |
 | [pi-sidequest](https://github.com/peterp/pi-sidequest) | Side-task execution |
-| [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter) | MCP server integration |
 | [pi-subagents](https://github.com/tintinweb/pi-subagents) | Parallel subagent orchestration |
 | [pi-cursor-sdk](https://github.com/fitchmultz/pi-cursor-sdk) | Cursor SDK agents inside Pi |
 | [pi-transcribe](https://github.com/earendil-works/pi-transcribe) | Local speech-to-text dictation |

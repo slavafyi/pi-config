@@ -48,8 +48,8 @@ The extension publishes the compact display form directly:
 
 ```text
 7d:82% ↺4d22h7m
-auto:99% ↺30d4h
-api:97% ↺30d4h
+cursor:99% ↺30d4h
+other:97% ↺30d4h
 ```
 
 The window and reset are dim. The remaining percentage is accent above 25%,
@@ -58,10 +58,12 @@ preserves those ANSI colors while positioning and truncating the status
 responsively. When the footer is invalidated, the extension restyles its saved
 semantic status with the current theme without running CodexBar again.
 
-OpenAI prefers the weekly Codex window. Cursor shows the active category: Auto
-for Auto/Composer and API for explicitly selected models, falling back to Total
-when that category is unavailable. It never combines pools or displays
-balances, spend caps, or on-demand state.
+OpenAI prefers the weekly Codex window. Cursor shows `cursor` for Cursor Models
+(Composer and Grok) and `other` for explicitly selected third-party models.
+Router/Auto shows `total` because its selected model can change between turns.
+When the preferred category is unavailable, the extension falls back to Total
+and then the remaining category. It never combines pools or displays balances,
+spend caps, or on-demand state.
 
 Missing credentials show `OpenAI: unavailable` or `Cursor: unavailable` without
 interrupting Pi. Unsupported Pi providers clear the status. CodexBar also

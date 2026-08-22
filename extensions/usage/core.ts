@@ -182,9 +182,15 @@ export function normalizeCursorModelId(modelId: string): NormalizedModel {
   return { base, fast };
 }
 
-export function preferredCursorPool(modelId: string): "Auto" | "API" {
+export type CursorPool = "Cursor" | "Other" | "Total";
+
+export function preferredCursorPool(modelId: string): CursorPool {
   const { base } = normalizeCursorModelId(modelId);
-  return base === "auto" || base === "default" || base.startsWith("composer-") ? "Auto" : "API";
+  if (base === "auto" || base === "auto-smart" || base === "default") return "Total";
+  if (base.startsWith("composer-") || base === "grok-4.5" || base === "grok-4.6") {
+    return "Cursor";
+  }
+  return "Other";
 }
 
 export function selectCursorQuota(
@@ -193,17 +199,27 @@ export function selectCursorQuota(
   now = new Date(),
 ): QuotaStatus | undefined {
   const preferredPool = preferredCursorPool(modelId);
-  const preferred = preferredPool === "Auto" ? entry.usage?.secondary : entry.usage?.tertiary;
-  const other = preferredPool === "Auto" ? entry.usage?.tertiary : entry.usage?.secondary;
-  const value = preferred ?? entry.usage?.primary ?? other;
-  const label = preferred
-    ? preferredPool.toLowerCase()
-    : entry.usage?.primary
-      ? "total"
-      : preferredPool === "Auto"
-        ? "api"
-        : "auto";
-  return value ? quota(value, label, now, label) : undefined;
+  const candidates: Array<[UsageWindow | null | undefined, string]> =
+    preferredPool === "Cursor"
+      ? [
+          [entry.usage?.secondary, "cursor"],
+          [entry.usage?.primary, "total"],
+          [entry.usage?.tertiary, "other"],
+        ]
+      : preferredPool === "Other"
+        ? [
+            [entry.usage?.tertiary, "other"],
+            [entry.usage?.primary, "total"],
+            [entry.usage?.secondary, "cursor"],
+          ]
+        : [
+            [entry.usage?.primary, "total"],
+            [entry.usage?.secondary, "cursor"],
+            [entry.usage?.tertiary, "other"],
+          ];
+  const selected = candidates.find(([value]) => value);
+  if (!selected?.[0]) return undefined;
+  return quota(selected[0], selected[1], now, selected[1]);
 }
 
 export function selectQuota(
@@ -303,7 +319,8 @@ const STANDARD_RATES: Record<string, TokenRates> = {
   "gpt-5.4-nano": { input: 0.2, cacheWrite: 0, cacheRead: 0.02, output: 1.25 },
   "gpt-5.5": { input: 5, cacheWrite: 0, cacheRead: 0.5, output: 30 },
   "gpt-5.6-luna": { input: 0.2, cacheWrite: 0.25, cacheRead: 0.02, output: 1.2 },
-  "gpt-5.6-sol": { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 30 },
+  // Cursor promotional pricing through November 21, 2026.
+  "gpt-5.6-sol": { input: 4, cacheWrite: 5, cacheRead: 0.4, output: 20 },
   "gpt-5.6-terra": { input: 2, cacheWrite: 2.5, cacheRead: 0.2, output: 12 },
   "grok-4.5": { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
   "grok-4.6": { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
@@ -312,20 +329,23 @@ const STANDARD_RATES: Record<string, TokenRates> = {
 };
 
 const FAST_RATES: Record<string, TokenRates> = {
+  "claude-opus-4-7": { input: 30, cacheWrite: 37.5, cacheRead: 3, output: 150 },
   "claude-opus-4-8": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 50 },
   "claude-opus-5": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 50 },
   "composer-2.5": { input: 3, cacheWrite: 0, cacheRead: 0.5, output: 15 },
+  "gpt-5.4": { input: 5, cacheWrite: 0, cacheRead: 0.5, output: 30 },
   "gpt-5.5": { input: 12.5, cacheWrite: 0, cacheRead: 1.25, output: 75 },
   "gpt-5.6-luna": { input: 0.4, cacheWrite: 0.5, cacheRead: 0.04, output: 2.4 },
-  "gpt-5.6-sol": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 60 },
+  "gpt-5.6-sol": { input: 8, cacheWrite: 10, cacheRead: 0.8, output: 40 },
   "gpt-5.6-terra": { input: 4, cacheWrite: 5, cacheRead: 0.4, output: 24 },
-  "grok-4.5": { input: 4, cacheWrite: 0, cacheRead: 1, output: 12 },
+  "grok-4.5": { input: 4, cacheWrite: 0, cacheRead: 1, output: 18 },
   "grok-4.6": { input: 4, cacheWrite: 0, cacheRead: 1, output: 12 },
 };
 
 const LONG_CONTEXT_RATES: Record<string, TokenRates> = {
+  "gpt-5.4": { input: 5, cacheWrite: 0, cacheRead: 0.5, output: 22.5 },
   "gpt-5.5": { input: 10, cacheWrite: 0, cacheRead: 1, output: 45 },
-  "gpt-5.6-sol": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 45 },
+  "gpt-5.6-sol": { input: 8, cacheWrite: 10, cacheRead: 0.8, output: 30 },
 };
 
 export function estimateCursorCost(

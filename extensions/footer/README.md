@@ -10,13 +10,13 @@ unchanged.
 At a wide terminal width, the first line has left- and right-aligned blocks:
 
 ```text
-pi-config:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
+pi-config:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1%  ctx:12%/272k  $1.134
 ```
 
 Inside tmux, the project name is omitted but the Git branch remains:
 
 ```text
-main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1% ↺4:23  ctx:12%/272k  $1.134
+main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1%  ctx:12%/272k  $1.134
 ```
 
 A non-Git directory shows its folder name outside tmux and no project identifier
@@ -26,20 +26,16 @@ Branch changes update the footer without a reload.
 The footer recognizes these fixed status IDs:
 
 - `usage`
-- `cache-timer`
 - `mcp`
 - `subagents`
 - `plan-mode`
 
 Known values are parsed and placed in fixed slots. The footer preserves the
-canonical ANSI styling supplied by the owned `usage`, `cache-timer`, and
-`plan-mode` extensions whenever their displayed text does not need rewriting.
-On component invalidation it emits the internal `footer:invalidate` event so
-those extensions can rebuild their strings with the current theme. The footer
-does not duplicate or override their color rules. This retains dynamic cache
-and quota colors without duplicating their rules.
-The cache reset marker is inserted inside the timer's preserved style, so
-`↺0:30` changes color as one unit.
+canonical ANSI styling supplied by the owned `usage` and `plan-mode`
+extensions whenever their displayed text does not need rewriting. On component
+invalidation it emits the internal `footer:invalidate` event so those
+extensions can rebuild their strings with the current theme. The footer does
+not duplicate or override their color rules.
 
 MCP and subagent statuses still require footer-side normalization because they
 come from third-party extensions and change shape at narrower widths. For
@@ -68,7 +64,6 @@ The right block includes:
 
 - the subscription quota supplied by `usage`;
 - the latest assistant message's prompt-cache hit rate;
-- the cache expiry supplied by `cache-timer`;
 - context usage from Pi's public context API;
 - total session cost, including assistant messages, tool results with usage,
   compactions, and branch summaries.
