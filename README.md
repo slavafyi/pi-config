@@ -55,13 +55,13 @@ of one. Pi's default agents are disabled in favor of these definitions.
 
 ## Packages
 
-Packages are declared in `settings.json` and managed by Pi.
+Packages are declared in `settings.json` and pinned to immutable git commits or exact npm versions.
 
 | Package | Purpose |
 |---------|---------|
 | [pi-wakatime](https://github.com/ttttmr/pi-wakatime) | WakaTime activity tracking |
 | [pi-fff](https://github.com/ShpetimA/pi-fff) | Fast file and content search tools |
-| [pi-openai-server-compaction](https://github.com/algal/pi-openai-server-compaction) | OpenAI server-side context compaction |
+| [pi-openai-server-compaction](https://github.com/algal/pi-openai-server-compaction) | OpenAI server-side context compaction with the pending [usage-reporting fix](https://github.com/algal/pi-openai-server-compaction/pull/15) |
 | [pi-auto-session-titles](https://github.com/edxeth/pi-auto-session-titles) | Automatic session titles |
 | [pi-datetime](https://github.com/yusukeshib/pi-datetime) | Date and time context |
 | [pi-sidequest](https://github.com/peterp/pi-sidequest) | Side-task execution |
