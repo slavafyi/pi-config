@@ -113,8 +113,6 @@ export default function footer(pi: ExtensionAPI) {
               metrics: {
                 quota: statuses.usage,
                 quotaStyled: statuses.usageStyled,
-                cacheTimer: statuses.cacheTimer,
-                cacheTimerStyled: statuses.cacheTimerStyled,
                 cacheHitPercent: stats.cacheHitPercent,
                 context,
                 cost: stats.cost,

@@ -91,16 +91,23 @@ test("changes quota percent tone at warning and error thresholds", () => {
 });
 
 test("selects the active Cursor pool without combining pools", () => {
-  const composer = selectCursorQuota(entry("cursor"), "composer-2.5:fast", now);
-  assert.ok(composer);
-  assert.equal(composer.pool, "auto");
-  assert.equal(formatQuotaStatus(composer), "auto:80% ↺9d4h");
+  for (const model of ["composer-2.5:fast", "grok-4.6:slow"]) {
+    const cursor = selectCursorQuota(entry("cursor"), model, now);
+    assert.ok(cursor);
+    assert.equal(cursor.pool, "cursor");
+    assert.equal(formatQuotaStatus(cursor), "cursor:80% ↺9d4h");
+  }
 
   const gpt = selectCursorQuota(entry("cursor"), "gpt-5.6-sol@1m:slow", now);
   assert.ok(gpt);
-  assert.equal(gpt.pool, "api");
+  assert.equal(gpt.pool, "other");
   assert.equal(gpt.usedPercent, 55);
-  assert.equal(formatQuotaStatus(gpt), "api:45% ↺9d4h");
+  assert.equal(formatQuotaStatus(gpt), "other:45% ↺9d4h");
+
+  const auto = selectCursorQuota(entry("cursor"), "auto-smart", now);
+  assert.ok(auto);
+  assert.equal(auto.pool, "total");
+  assert.equal(formatQuotaStatus(auto), "total:99% ↺9d4h");
 });
 
 test("falls back to Cursor total when the active pool is absent", () => {
@@ -148,10 +155,12 @@ test("uses current Cursor rates for newly listed and repriced models", () => {
     cacheWrite: 1_000_000,
   };
   const expected = new Map([
+    ["claude-opus-4-7:fast", { input: 30, output: 150, cacheRead: 3, cacheWrite: 37.5 }],
     ["claude-sonnet-5", { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 }],
     ["gemini-3.7-flash", { input: 0.75, output: 3.5, cacheRead: 0.075, cacheWrite: 0 }],
     ["glm-5.2", { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 0 }],
-    ["grok-4.5:fast", { input: 4, output: 12, cacheRead: 1, cacheWrite: 0 }],
+    ["gpt-5.4:fast", { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 0 }],
+    ["grok-4.5:fast", { input: 4, output: 18, cacheRead: 1, cacheWrite: 0 }],
     ["grok-4.6:fast", { input: 4, output: 12, cacheRead: 1, cacheWrite: 0 }],
     ["kimi-k2.7-code", { input: 0.95, output: 4, cacheRead: 0.19, cacheWrite: 0 }],
   ]);
@@ -172,35 +181,57 @@ test("uses current Cursor rates for newly listed and repriced models", () => {
   }
 });
 
+test("uses promotional GPT-5.6 Sol rates below the long-context threshold", () => {
+  const cost = estimateCursorCost("gpt-5.6-sol", {
+    input: 100_000,
+    output: 100_000,
+    cacheRead: 10_000,
+    cacheWrite: 10_000,
+  });
+  assert.ok(cost);
+  assert.equal(cost.input, 0.4);
+  assert.equal(cost.output, 2);
+  assert.equal(cost.cacheRead, 0.004);
+  assert.equal(cost.cacheWrite, 0.05);
+});
+
 test("uses explicit Fast rates and emits a complete cost breakdown", () => {
   const cost = estimateCursorCost("gpt-5.6-sol@1m:fast", message().usage);
   assert.ok(cost);
-  assert.equal(cost.input, 0.01);
-  assert.equal(cost.output, 0.006);
-  assert.equal(cost.cacheRead, 0.002);
-  assert.equal(cost.cacheWrite, 0.00375);
-  assert.ok(Math.abs(cost.total - 0.02175) < 1e-12);
+  assert.equal(cost.input, 0.008);
+  assert.equal(cost.output, 0.004);
+  assert.equal(cost.cacheRead, 0.0016);
+  assert.equal(cost.cacheWrite, 0.003);
+  assert.ok(Math.abs(cost.total - 0.0166) < 1e-12);
 });
 
 test("patches only new zero-cost Cursor messages once", () => {
   const original = message();
   const patched = patchCursorMessageCost(original);
   assert.notEqual(patched, original);
-  assert.ok(Math.abs(patched.usage.cost.total - 0.02175) < 1e-12);
+  assert.ok(Math.abs(patched.usage.cost.total - 0.0166) < 1e-12);
   assert.equal(patchCursorMessageCost(patched), patched);
   const openai = message("openai-codex");
   assert.equal(patchCursorMessageCost(openai), openai);
 });
 
 test("uses documented long-context rates only with a token signal", () => {
-  const cost = estimateCursorCost("gpt-5.6-sol@1m:slow", {
+  const usage = {
     input: 10_000,
     output: 1_000,
     cacheRead: 270_000,
     cacheWrite: 0,
-  });
-  assert.ok(cost);
-  assert.equal(cost.input, 0.1);
-  assert.equal(cost.cacheRead, 0.27);
-  assert.equal(cost.output, 0.045);
+  };
+  const expected = new Map([
+    ["gpt-5.4@1m:slow", { input: 0.05, cacheRead: 0.135, output: 0.0225 }],
+    ["gpt-5.6-sol@1m:slow", { input: 0.08, cacheRead: 0.216, output: 0.03 }],
+  ]);
+
+  for (const [model, rates] of expected) {
+    const cost = estimateCursorCost(model, usage);
+    assert.ok(cost);
+    assert.equal(cost.input, rates.input);
+    assert.equal(cost.cacheRead, rates.cacheRead);
+    assert.equal(cost.output, rates.output);
+  }
 });
