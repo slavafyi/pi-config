@@ -83,6 +83,7 @@ const SAFE_PATTERNS = [
 	/^\s*yarn\s+(list|info|why|audit)/i,
 	/^\s*node\s+--version/i,
 	/^\s*python\s+--version/i,
+	/^\s*parallel-cli\s+(auth|search|extract|fetch|findall|research|memory|monitor\s+(list|get)|balance\s+get)\b/,
 	/^\s*curl\s/i,
 	/^\s*wget\s+-O\s*-/i,
 	/^\s*jq\b/,
