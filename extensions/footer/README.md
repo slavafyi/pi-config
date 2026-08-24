@@ -1,27 +1,35 @@
 # Footer
 
-A minimal custom Pi footer that replaces the built-in footer with one responsive
-status line. It keeps all extension statuses available through
-`footerData.getExtensionStatuses()` and leaves the `pi-subagents` agent widget
-unchanged.
+A minimal Pi UI extension that customizes the editor's top border and replaces
+the built-in footer with one responsive status line. It keeps all extension
+statuses available through `footerData.getExtensionStatuses()` and leaves the
+built-in working indicator and the `pi-subagents` agent widget unchanged.
 
 ## Format
 
-At a wide terminal width, the first line has left- and right-aligned blocks:
+The editor's top border shows the project and Git branch on the left and the
+model and thinking level on the right:
 
 ```text
-pi-config:main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1%  ctx:12%/272k  $1.134
+─ pi-config:main ───────────────────────────────── gpt-5.6-sol:fast/medium ─
 ```
 
 Inside tmux, the project name is omitted but the Git branch remains:
 
 ```text
-main  gpt-5.6-sol:fast/medium  MCP:0/2  agents:2  ⏸︎ plan    7d:94% ↺5d13h  cache:98.1%  ctx:12%/272k  $1.134
+─ main ─────────────────────────────────────────── gpt-5.6-sol:fast/medium ─
 ```
 
-A non-Git directory shows its folder name outside tmux and no project identifier
-inside tmux. A detached checkout uses `project:HEAD` or `HEAD`.
-Branch changes update the footer without a reload.
+The footer groups provider and runtime statuses on the left and session metrics
+on the right:
+
+```text
+7d:94% ↺5d13h  MCP:0/2  agents:2  ⏸︎ plan    cache:98.1%  ctx:12%/272k  $1.134
+```
+
+A non-Git directory shows its folder name in the editor border outside tmux and
+no project identifier inside tmux. A detached checkout uses `project:HEAD` or
+`HEAD`. Branch changes update the editor border without a reload.
 
 The footer recognizes these fixed status IDs:
 
@@ -60,9 +68,9 @@ absent when there are no unknown statuses.
 
 ## Session metrics
 
-The right block includes:
+The left block starts with the subscription quota supplied by `usage`. The
+right block includes:
 
-- the subscription quota supplied by `usage`;
 - the latest assistant message's prompt-cache hit rate;
 - context usage from Pi's public context API;
 - total session cost, including assistant messages, tool results with usage,
@@ -73,17 +81,18 @@ a new model response.
 
 ## Responsive behavior
 
-The layout selects the first variant that fits the measured terminal width. It
-does not use fixed breakpoints. It progressively rounds metrics, shortens agent,
-MCP, plan, thinking, cache, context, project, and model labels, then removes
-healthy or lower-priority metrics. `visibleWidth()` ignores preserved and
-footer-generated ANSI sequences, and a final ANSI-safe truncation guarantees
-that no rendered line exceeds the available width.
+Both layouts select variants by measured terminal width instead of fixed
+breakpoints. The editor border progressively shortens thinking, project, and
+model labels. The footer progressively rounds metrics, shortens agent, MCP,
+plan, cache, and context labels, then removes healthy or lower-priority metrics.
+`visibleWidth()` ignores preserved and generated ANSI sequences, and final
+ANSI-safe truncation guarantees that no rendered line exceeds the available
+width.
 
 Active plan mode, running or queued agents, MCP errors, low-quota reset times,
 and critical context usage have priority over optional details. At extremely
 small widths, the terminal width is still the final limit.
 
-Use `/reload` after changing the extension. Verify tmux, branch changes, MCP,
-subagents, plan mode, terminal resizing, and both light and dark themes in a
-real TUI.
+Use `/reload` after changing the extension. Verify editor input and shortcuts,
+tmux, branch changes, model and thinking changes, MCP, subagents, plan mode,
+terminal resizing, and both light and dark themes in a real TUI.

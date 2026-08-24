@@ -8,10 +8,12 @@ import {
   parseFooterConfig,
   projectLabel,
   projectName,
+  renderEditorTopBorder,
   renderFooter,
   sanitizeStatus,
   stripAnsi,
   subscribeToBranchChanges,
+  type EditorBorderInput,
   type FooterLayoutInput,
   type FooterRole,
   type WidthTools,
@@ -63,12 +65,6 @@ const tools: WidthTools = {
 
 function input(overrides: Partial<FooterLayoutInput> = {}): FooterLayoutInput {
   return {
-    project: "pi-config",
-    branch: "main",
-    inGit: true,
-    inTmux: false,
-    model: "gpt-5.6-sol:fast",
-    thinking: "medium",
     statuses: {
       usage: "7d:94% ↺5d13h",
       mcp: "MCP:0/2",
@@ -85,6 +81,18 @@ function input(overrides: Partial<FooterLayoutInput> = {}): FooterLayoutInput {
       cost: 1.134,
     },
     unknown: [],
+    ...overrides,
+  };
+}
+
+function editorInput(overrides: Partial<EditorBorderInput> = {}): EditorBorderInput {
+  return {
+    project: "pi-config",
+    branch: "main",
+    inGit: true,
+    inTmux: false,
+    model: "gpt-5.6-sol:fast",
+    thinking: "medium",
     ...overrides,
   };
 }
@@ -198,12 +206,12 @@ test("calculates full cost and the latest assistant cache hit", () => {
 
 test("renders wide, compact, narrow, and minimal layouts by measured width", () => {
   const wide = renderFooter(input(), 180, tools);
-  assert.match(wide[0]!, /^pi-config:main  gpt-5\.6-sol:fast\/medium  MCP:0\/2  agents:2  ⏸︎ plan\s+/);
-  assert.ok(wide[0]!.endsWith("7d:94% ↺5d13h  cache:98.1%  ctx:12%/272k  $1.134"));
+  assert.match(wide[0]!, /^7d:94% ↺5d13h  MCP:0\/2  agents:2  ⏸︎ plan\s+/);
+  assert.ok(wide[0]!.endsWith("cache:98.1%  ctx:12%/272k  $1.134"));
 
-  const compact = renderFooter(input(), 110, tools);
+  const compact = renderFooter(input(), 62, tools);
   assert.match(compact[0]!, /A(?::)?2/);
-  assertWidths(compact, 110);
+  assertWidths(compact, 62);
 
   const narrow = renderFooter(input(), 72, tools);
   assert.match(narrow[0]!, /⏸/);
@@ -214,10 +222,32 @@ test("renders wide, compact, narrow, and minimal layouts by measured width", () 
   assert.notEqual(minimal[0], "");
 });
 
-test("keeps tmux branch and compacts model and thinking to a slash form", () => {
-  const lines = renderFooter(input({ inTmux: true }), 62, tools);
-  assert.match(lines[0]!, /\bmain\b/);
-  assert.match(lines[0]!, /5\.6\/m/);
+test("renders project and model metadata in the editor top border", () => {
+  const wide = renderEditorTopBorder(editorInput(), 80, tools, (text) => text);
+  assert.match(wide, /^─ pi-config:main ─+/);
+  assert.ok(wide.endsWith(" gpt-5.6-sol:fast/medium ─"));
+  assert.equal(tools.visibleWidth(wide), 80);
+
+  const tmux = renderEditorTopBorder(
+    editorInput({ inTmux: true }),
+    62,
+    tools,
+    (text) => text,
+  );
+  assert.match(tmux, /^─ main ─+/);
+  assert.ok(tmux.endsWith(" gpt-5.6-sol:fast/medium ─"));
+  assert.equal(tools.visibleWidth(tmux), 62);
+
+  const compact = renderEditorTopBorder(editorInput(), 24, tools, (text) => text);
+  assert.match(compact, /5\.6\/m/);
+  assert.equal(tools.visibleWidth(compact), 24);
+
+  for (const width of [1, 2, 5, 12, 24]) {
+    assert.equal(
+      tools.visibleWidth(renderEditorTopBorder(editorInput(), width, tools, (text) => text)),
+      width,
+    );
+  }
 });
 
 test("preserves owned extension colors inside the responsive layout", () => {
@@ -308,12 +338,24 @@ test("applies semantic colors after responsive selection", () => {
     tools,
   );
   const plain = renderFooter(input(), 180, tools);
+  const editor = renderEditorTopBorder(
+    editorInput({
+      style(text, role) {
+        roles.add(role);
+        return `\x1b[36m${text}\x1b[0m`;
+      },
+    }),
+    80,
+    tools,
+    (text) => `\x1b[2m${text}\x1b[0m`,
+  );
   assert.match(colored[0]!, /\x1b\[36m/);
   assert.equal(stripAnsi(colored[0]!), plain[0]);
   for (const role of ["project", "model", "mcp", "agents", "plan", "quota", "cache", "context", "cost"] as const) {
     assert.ok(roles.has(role), `missing semantic role: ${role}`);
   }
   assertWidths(colored, 180);
+  assert.equal(tools.visibleWidth(editor), 80);
 });
 
 test("handles ANSI and Unicode without exceeding any requested width", () => {
@@ -329,8 +371,6 @@ test("handles ANSI and Unicode without exceeding any requested width", () => {
 
 test("preserves active and critical statuses before optional metrics", () => {
   const critical = input({
-    project: "a-very-long-project-name",
-    model: "a-very-long-model-name",
     statuses: {
       usage: "7d:9% ↺2h",
       mcp: "MCP:error auth",
