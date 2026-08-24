@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { CustomEditor, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
   calculateSessionStats,
@@ -8,6 +8,7 @@ import {
   normalizeKnownStatuses,
   parseFooterConfig,
   projectName,
+  renderEditorTopBorder,
   renderFooter,
   subscribeToBranchChanges,
   type ContextLike,
@@ -52,8 +53,10 @@ export default function footer(pi: ExtensionAPI) {
     const project = inGit ? projectName(gitRoot.stdout, ctx.cwd) : basename(ctx.cwd);
     const inTmux = Boolean(process.env.TMUX);
     const config = loadConfig();
+    let getBranch: () => string | null = () => null;
 
     ctx.ui.setFooter((tui, theme, footerData) => {
+      getBranch = () => footerData.getGitBranch();
       let disposed = false;
       const unsubscribe = subscribeToBranchChanges(footerData, () => tui.requestRender());
       const componentCleanup = () => {
@@ -103,12 +106,6 @@ export default function footer(pi: ExtensionAPI) {
 
           const lines = renderFooter(
             {
-              project,
-              branch: footerData.getGitBranch(),
-              inGit,
-              inTmux,
-              model: ctx.model?.id,
-              thinking: ctx.thinkingLevel,
               statuses,
               metrics: {
                 quota: statuses.usage,
@@ -128,11 +125,40 @@ export default function footer(pi: ExtensionAPI) {
         },
       };
     });
+
+    class StatusEditor extends CustomEditor {
+      render(width: number): string[] {
+        const lines = super.render(width);
+        if (lines.length === 0) return lines;
+        lines[0] = renderEditorTopBorder(
+          {
+            project,
+            branch: getBranch(),
+            inGit,
+            inTmux,
+            model: ctx.model?.id,
+            thinking: ctx.thinkingLevel,
+            style: (text) => ctx.ui.theme.fg("dim", text),
+          },
+          width,
+          { visibleWidth, truncateToWidth },
+          (text) => this.borderColor(text),
+        );
+        return lines;
+      }
+    }
+
+    ctx.ui.setEditorComponent(
+      (tui, theme, keybindings) => new StatusEditor(tui, theme, keybindings),
+    );
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
     generation += 1;
     dispose();
-    if (ctx.mode === "tui") ctx.ui.setFooter(undefined);
+    if (ctx.mode === "tui") {
+      ctx.ui.setEditorComponent(undefined);
+      ctx.ui.setFooter(undefined);
+    }
   });
 }

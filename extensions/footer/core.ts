@@ -81,18 +81,24 @@ export interface FooterConfig {
   showUnknownStatuses: boolean;
 }
 
-export interface FooterLayoutInput {
+interface StyledLayout {
+  style?: (text: string, role: FooterRole) => string;
+}
+
+export interface FooterLayoutInput extends StyledLayout {
+  statuses: KnownStatuses;
+  metrics: FooterMetrics;
+  unknown: string[];
+  showUnknownStatuses?: boolean;
+}
+
+export interface EditorBorderInput extends StyledLayout {
   project?: string;
   branch?: string | null;
   inGit: boolean;
   inTmux: boolean;
   model?: string;
   thinking?: string;
-  statuses: KnownStatuses;
-  metrics: FooterMetrics;
-  unknown: string[];
-  showUnknownStatuses?: boolean;
-  style?: (text: string, role: FooterRole) => string;
 }
 
 export function parseFooterConfig(value: unknown): FooterConfig {
@@ -282,17 +288,72 @@ function thinkingInitial(thinking: string | undefined): string | undefined {
   return thinking[0];
 }
 
+function modelLabel(
+  model: string | undefined,
+  thinking: string | undefined,
+  compactThinking: boolean,
+  compactName: boolean,
+): string | undefined {
+  if (!model) return undefined;
+  const level = compactThinking ? thinkingInitial(thinking) : thinking;
+  return `${compactName ? compactModel(model) : model}${level && level !== "off" ? `/${level}` : ""}`;
+}
+
+export function renderEditorTopBorder(
+  input: EditorBorderInput,
+  width: number,
+  tools: WidthTools,
+  border: (text: string) => string,
+): string {
+  if (width <= 0) return "";
+  if (width === 1) return border("─");
+
+  const fullProject = projectLabel(input);
+  const branchOnly = input.inGit
+    ? projectLabel({ ...input, project: undefined, inTmux: false })
+    : fullProject;
+  const candidates = [
+    { project: fullProject, model: modelLabel(input.model, input.thinking, false, false) },
+    { project: fullProject, model: modelLabel(input.model, input.thinking, true, false) },
+    { project: branchOnly, model: modelLabel(input.model, input.thinking, true, false) },
+    { project: branchOnly, model: modelLabel(input.model, input.thinking, true, true) },
+  ];
+
+  const decorate = (text: string, role: FooterRole): string =>
+    input.style ? input.style(text, role) : text;
+  const render = (project: string, model: string): string => {
+    const gap = Math.max(0, width - 2 - tools.visibleWidth(project) - tools.visibleWidth(model));
+    return `${border("─")}${decorate(project, "project")}${border("─".repeat(gap))}${decorate(model, "model")}${border("─")}`;
+  };
+
+  for (const candidate of candidates) {
+    const project = candidate.project ? ` ${candidate.project} ` : "";
+    const model = candidate.model ? ` ${candidate.model} ` : "";
+    if (2 + tools.visibleWidth(project) + tools.visibleWidth(model) + 1 <= width) {
+      return render(project, model);
+    }
+  }
+
+  let project = branchOnly ? ` ${branchOnly} ` : "";
+  let model = modelLabel(input.model, input.thinking, true, true);
+  model = model ? ` ${model} ` : "";
+  while (2 + tools.visibleWidth(project) + tools.visibleWidth(model) > width && model) {
+    model = tools.truncateToWidth(model, tools.visibleWidth(model) - 1, "");
+  }
+  while (2 + tools.visibleWidth(project) + tools.visibleWidth(model) > width && project) {
+    project = tools.truncateToWidth(project, tools.visibleWidth(project) - 1, "");
+  }
+  return render(project, model);
+}
+
 interface VariantState {
   percentDigits: number;
   costDigits: number;
   agentStyle: 0 | 1 | 2;
   mcpCompact: boolean;
   planCompact: boolean;
-  thinkingCompact: boolean;
   cacheStyle: 0 | 1 | 2;
   contextStyle: 0 | 1 | 2;
-  branchOnly: boolean;
-  modelCompact: boolean;
   hideHealthyMcp: boolean;
   hideCache: boolean;
   hideCost: boolean;
@@ -353,7 +414,7 @@ function roleForQuota(text: string): FooterRole {
   return "quota";
 }
 
-function styleText(text: string, role: FooterRole, input: FooterLayoutInput): string {
+function styleText(text: string, role: FooterRole, input: StyledLayout): string {
   return input.style ? input.style(text, role) : text;
 }
 
@@ -399,19 +460,18 @@ function renderParts(
 
 function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: string; right: string } {
   const left: FooterPart[] = [];
-  let label = projectLabel(input);
-  if (state.branchOnly && input.inGit) label = input.branch || "detached";
-  if (label) left.push({ text: label, role: "project" });
-
-  const initial = thinkingInitial(input.thinking);
-  if (input.model) {
-    let text = input.model;
-    if (state.modelCompact) {
-      text = `${compactModel(input.model)}${initial ? `/${initial}` : ""}`;
-    } else if (input.thinking && input.thinking !== "off") {
-      text = `${input.model}/${state.thinkingCompact ? initial : input.thinking}`;
-    }
-    left.push({ text, role: "model" });
+  if (input.metrics.quota) {
+    const text = input.metrics.quota.replace(/(\d+(?:\.\d+)?)%/, (value) =>
+      formatPercent(Number.parseFloat(value), state.percentDigits),
+    );
+    const styled = preservesText(input.metrics.quotaStyled, text)
+      ? input.metrics.quotaStyled
+      : undefined;
+    left.push({
+      text: styled ?? text,
+      role: roleForQuota(text),
+      preserveStyle: styled !== undefined,
+    });
   }
 
   const statuses = input.statuses;
@@ -438,20 +498,6 @@ function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: str
   }
 
   const right: FooterPart[] = [];
-  if (input.metrics.quota) {
-    const text = input.metrics.quota.replace(/(\d+(?:\.\d+)?)%/, (value) =>
-      formatPercent(Number.parseFloat(value), state.percentDigits),
-    );
-    const styled = preservesText(input.metrics.quotaStyled, text)
-      ? input.metrics.quotaStyled
-      : undefined;
-    right.push({
-      text: styled ?? text,
-      role: roleForQuota(text),
-      preserveStyle: styled !== undefined,
-    });
-  }
-
   const hit = input.metrics.cacheHitPercent;
   if (!state.hideCache && hit !== undefined) {
     const hitText = formatPercent(hit, state.cacheStyle === 0 ? state.percentDigits : 0);
@@ -525,11 +571,8 @@ export function renderFooter(
     agentStyle: 0,
     mcpCompact: false,
     planCompact: false,
-    thinkingCompact: false,
     cacheStyle: 0,
     contextStyle: 0,
-    branchOnly: false,
-    modelCompact: false,
     hideHealthyMcp: false,
     hideCache: false,
     hideCost: false,
@@ -542,13 +585,10 @@ export function renderFooter(
     () => { state.agentStyle = 2; },
     () => { state.mcpCompact = true; },
     () => { state.planCompact = true; },
-    () => { state.thinkingCompact = true; },
     () => { state.cacheStyle = 1; },
     () => { state.cacheStyle = 2; },
     () => { state.contextStyle = 1; },
     () => { state.contextStyle = 2; },
-    () => { state.branchOnly = true; },
-    () => { state.modelCompact = true; },
     () => { state.hideHealthyMcp = true; },
     () => { state.hideCache = true; },
     () => { state.hideCost = true; },
