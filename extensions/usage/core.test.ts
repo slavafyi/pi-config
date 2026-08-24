@@ -89,6 +89,82 @@ test("normalizes direct Codex usage and response headers", () => {
   assert.deepEqual(headers?.[0]?.usage, payload[0]?.usage);
 });
 
+test("classifies Codex windows by duration instead of wire position", () => {
+  const reordered = parseCodexUsagePayload(JSON.stringify({
+    rate_limit: {
+      primary_window: { used_percent: 70, limit_window_seconds: 604_800 },
+      secondary_window: { used_percent: 20, limit_window_seconds: 18_000 },
+    },
+  }));
+  assert.equal(reordered[0]?.usage?.primary?.usedPercent, 20);
+  assert.equal(reordered[0]?.usage?.secondary?.usedPercent, 70);
+
+  const reorderedHeaders = parseCodexRateLimitHeaders({
+    "x-codex-primary-used-percent": "70",
+    "x-codex-primary-window-minutes": "10080",
+    "x-codex-secondary-used-percent": "20",
+    "x-codex-secondary-window-minutes": "300",
+  });
+  assert.equal(reorderedHeaders?.[0]?.usage?.primary?.usedPercent, 20);
+  assert.equal(reorderedHeaders?.[0]?.usage?.secondary?.usedPercent, 70);
+
+  const weeklyOnly = parseCodexUsagePayload(JSON.stringify({
+    rate_limit: {
+      primary_window: { used_percent: 42, limit_window_seconds: 604_800 },
+      secondary_window: null,
+    },
+  }));
+  assert.equal(weeklyOnly[0]?.usage?.primary, null);
+  assert.equal(weeklyOnly[0]?.usage?.secondary?.usedPercent, 42);
+
+  assert.throws(
+    () => parseCodexUsagePayload(JSON.stringify({
+      rate_limit: {
+        primary_window: { used_percent: 10, limit_window_seconds: 604_800 },
+        secondary_window: { used_percent: 20, limit_window_seconds: 604_800 },
+      },
+    })),
+    /duplicate Codex 7d window/,
+  );
+});
+
+test("falls back to Codex wire position for unknown window durations", () => {
+  const report = parseCodexUsagePayload(JSON.stringify({
+    rate_limit: {
+      primary_window: { used_percent: 10, limit_window_seconds: 3_600 },
+      secondary_window: { used_percent: 20, limit_window_seconds: 17_999 },
+    },
+  }));
+  assert.equal(report[0]?.usage?.primary?.windowMinutes, 60);
+  assert.equal(report[0]?.usage?.secondary?.windowMinutes, 300);
+});
+
+test("uses Codex reset_after_seconds when reset_at is absent", () => {
+  const report = parseCodexUsagePayload(JSON.stringify({
+    rate_limit: {
+      primary_window: {
+        used_percent: 10,
+        limit_window_seconds: 18_000,
+        reset_after_seconds: 90,
+      },
+    },
+  }), new Date("2026-08-11T10:00:00Z"));
+  assert.equal(report[0]?.usage?.primary?.resetsAt, "2026-08-11T10:01:30.000Z");
+
+  assert.throws(
+    () => parseCodexUsagePayload(JSON.stringify({
+      rate_limit: {
+        primary_window: {
+          used_percent: 10,
+          limit_window_seconds: 18_000,
+          reset_after_seconds: -1,
+        },
+      },
+    })),
+    /reset_after_seconds/,
+  );
+});
+
 test("normalizes Cursor Agent billing pools", () => {
   const report = parseCursorUsagePayload(JSON.stringify({
     billingCycleStart: "1786395882000",
