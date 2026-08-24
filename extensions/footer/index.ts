@@ -145,7 +145,8 @@ export default function footer(pi: ExtensionAPI) {
         ? previous(tui, theme, keybindings)
         : new CustomEditor(tui, theme, keybindings);
       const render = editor.render.bind(editor);
-      const borderColor = editor.borderColor ?? theme.borderColor;
+      const borderColor = (text: string): string =>
+        editor.borderColor?.(text) ?? theme.borderColor(text);
       editor.render = (width: number): string[] => {
         const lines = render(width);
         if (lines.length === 0) return lines;

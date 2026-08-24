@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { stripAnsi } from "./core.ts";
 import footer from "./index.ts";
 
 test("decorates an editor installed by a later session_start handler", async () => {
@@ -49,7 +50,7 @@ test("decorates an editor installed by a later session_start handler", async () 
   const autocompleteProvider = { name: "fff autocomplete" };
   const baseEditor = {
     marker: "fff",
-    borderColor: (text: string) => text,
+    borderColor: (text: string) => `\x1b[2m${text}\x1b[0m`,
     render: (width: number) => ["─".repeat(width), "", "─".repeat(width)],
     setAutocompleteProvider: () => autocompleteProvider,
   };
@@ -59,12 +60,16 @@ test("decorates an editor installed by a later session_start handler", async () 
   handlers.get("resources_discover")?.({}, ctx);
   assert.notEqual(editorFactory, fffFactory);
 
-  const editor = editorFactory?.({}, {}, {});
+  const editor = editorFactory?.({}, { borderColor: (text: string) => text }, {});
   assert.equal(editor, baseEditor);
   assert.equal(editor.marker, "fff");
   assert.equal(editor.setAutocompleteProvider(), autocompleteProvider);
+
+  editor.borderColor = (text: string) => `\x1b[36m${text}\x1b[0m`;
   const lines = editor.render(80);
-  assert.match(lines[0], /^─ pi-config:main ─+/);
-  assert.ok(lines[0].endsWith(" gpt-5.6-sol/medium ─"));
-  assert.equal(lines[0].length, 80);
+  const topBorder = stripAnsi(lines[0]);
+  assert.match(lines[0], /^\x1b\[36m─\x1b\[0m/);
+  assert.match(topBorder, /^─ pi-config:main ─+/);
+  assert.ok(topBorder.endsWith(" gpt-5.6-sol/medium ─"));
+  assert.equal(topBorder.length, 80);
 });
