@@ -14,7 +14,7 @@ import {
   type ContextLike,
   type FooterRole,
   type SessionEntryLike,
-} from "./core.js";
+} from "./core.ts";
 import { emitFooterInvalidate } from "./events.ts";
 
 function loadConfig() {
@@ -32,6 +32,12 @@ function loadConfig() {
 export default function footer(pi: ExtensionAPI) {
   let generation = 0;
   let cleanup: (() => void) | undefined;
+  let editorState: {
+    project: string;
+    inGit: boolean;
+    inTmux: boolean;
+    getBranch: () => string | null;
+  } | undefined;
 
   function dispose() {
     cleanup?.();
@@ -126,36 +132,47 @@ export default function footer(pi: ExtensionAPI) {
       };
     });
 
-    class StatusEditor extends CustomEditor {
-      render(width: number): string[] {
-        const lines = super.render(width);
+    editorState = { project, inGit, inTmux, getBranch };
+  });
+
+  pi.on("resources_discover", (_event, ctx) => {
+    const state = editorState;
+    if (ctx.mode !== "tui" || !state) return;
+
+    const previous = ctx.ui.getEditorComponent();
+    ctx.ui.setEditorComponent((tui, theme, keybindings) => {
+      const editor = previous
+        ? previous(tui, theme, keybindings)
+        : new CustomEditor(tui, theme, keybindings);
+      const render = editor.render.bind(editor);
+      const borderColor = editor.borderColor ?? theme.borderColor;
+      editor.render = (width: number): string[] => {
+        const lines = render(width);
         if (lines.length === 0) return lines;
         lines[0] = renderEditorTopBorder(
           {
-            project,
-            branch: getBranch(),
-            inGit,
-            inTmux,
+            project: state.project,
+            branch: state.getBranch(),
+            inGit: state.inGit,
+            inTmux: state.inTmux,
             model: ctx.model?.id,
             thinking: ctx.thinkingLevel,
             style: (text) => ctx.ui.theme.fg("dim", text),
           },
           width,
           { visibleWidth, truncateToWidth },
-          (text) => this.borderColor(text),
+          borderColor,
         );
         return lines;
-      }
-    }
-
-    ctx.ui.setEditorComponent(
-      (tui, theme, keybindings) => new StatusEditor(tui, theme, keybindings),
-    );
+      };
+      return editor;
+    });
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
     generation += 1;
     dispose();
+    editorState = undefined;
     if (ctx.mode === "tui") {
       ctx.ui.setEditorComponent(undefined);
       ctx.ui.setFooter(undefined);
