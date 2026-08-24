@@ -35,24 +35,32 @@ Reload Pi after changing credentials:
 ## Status
 
 The extension reads the last successful snapshot from `usage-cache.json` in
-`PI_CODING_AGENT_DIR`, displays it immediately, and refreshes stale data in the
-background. The cache contains normalized quota data only, is written with mode
-`0600`, and never contains access or refresh tokens.
+`PI_CODING_AGENT_DIR`. Before displaying it, the extension resolves the current
+account and verifies a one-way account fingerprint stored with the snapshot.
+The cache contains normalized quota data and account fingerprints only, is
+written with mode `0600`, and never contains account IDs, access tokens, or
+refresh tokens.
 
-OpenAI Codex calls ChatGPT's `/backend-api/wham/usage` endpoint directly. It also
-updates the cached snapshot from rate-limit headers on normal Codex responses,
-so completed turns do not require another quota request.
+OpenAI Codex calls ChatGPT's `/backend-api/wham/usage` endpoint directly. It
+identifies the five-hour and weekly windows by their reported duration rather
+than their response position and accepts `reset_after_seconds` when an absolute
+reset is absent. It also updates the cached snapshot from rate-limit headers on
+normal Codex responses, so completed turns do not require another quota request.
 
 Cursor reads the Cursor Agent access token and calls
 `DashboardService/GetCurrentPeriodUsage` directly. The response supplies the
 billing-cycle reset and separate Total, Cursor Models, and Other Models usage
 percentages. Credentials are re-resolved once after an authentication failure.
 
-The network cache lasts five minutes, concurrent requests are deduplicated, and
-the last good value remains visible through temporary failures. When no cached
-status is available, a request that takes longer than 150 milliseconds shows a
-spinner. Headless sessions skip quota requests but still add Cursor cost
-estimates.
+The network cache lasts five minutes. In-process request sharing and an atomic
+inter-process lock deduplicate refreshes across concurrent Pi sessions. Cache
+writes merge the latest provider entries so one process cannot discard another
+provider's update. The last good value remains visible through temporary
+failures for at most seven days. A Cursor snapshot stops being usable as soon
+as its billing cycle resets, even when it is otherwise inside that stale limit.
+When no usable cached status is available, a request that takes longer than 150
+milliseconds shows a spinner. Headless sessions skip quota requests but still
+add Cursor cost estimates.
 
 The extension publishes the compact display form directly:
 

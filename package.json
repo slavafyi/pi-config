@@ -15,6 +15,10 @@
     "@earendil-works/pi-tui": "0.84.2",
     "@tsconfig/node24": "24.0.4",
     "@types/node": "24.12.4",
+    "@types/proper-lockfile": "4.1.4",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "proper-lockfile": "4.1.2"
   }
 }

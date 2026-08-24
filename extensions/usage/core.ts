@@ -144,7 +144,13 @@ function readFiniteNumber(value: unknown, field: string): number {
   return number;
 }
 
-function directWindow(value: unknown, field: string): UsageWindow | null {
+type CodexWindowKind = "session" | "weekly";
+interface CodexWindow {
+  value: UsageWindow;
+  kind?: CodexWindowKind;
+}
+
+function directWindow(value: unknown, field: string, now: Date): CodexWindow | null {
   if (value === null || value === undefined) return null;
   if (!isRecord(value)) throw new Error(`invalid ${field}`);
   const usedPercent = readFiniteNumber(value.used_percent, `${field}.used_percent`);
@@ -158,34 +164,70 @@ function directWindow(value: unknown, field: string): UsageWindow | null {
   const resetAt = value.reset_at === undefined
     ? undefined
     : readFiniteNumber(value.reset_at, `${field}.reset_at`);
-  const resetsAt = resetAt === undefined
+  const resetAfterSeconds = value.reset_after_seconds === undefined
     ? undefined
-    : new Date(resetAt > 1_000_000_000_000 ? resetAt : resetAt * 1_000).toISOString();
+    : readFiniteNumber(value.reset_after_seconds, `${field}.reset_after_seconds`);
+  if (resetAfterSeconds !== undefined && resetAfterSeconds < 0) {
+    throw new Error(`invalid ${field}.reset_after_seconds`);
+  }
+  const resetMilliseconds = resetAt !== undefined
+    ? (resetAt > 1_000_000_000_000 ? resetAt : resetAt * 1_000)
+    : resetAfterSeconds !== undefined
+      ? now.getTime() + resetAfterSeconds * 1_000
+      : undefined;
+  const resetDate = resetMilliseconds === undefined ? undefined : new Date(resetMilliseconds);
+  if (resetDate && !Number.isFinite(resetDate.getTime())) {
+    throw new Error(`invalid ${field} reset`);
+  }
   return {
-    usedPercent,
-    windowMinutes: Math.ceil(windowSeconds / 60),
-    ...(resetsAt ? { resetsAt } : {}),
+    value: {
+      usedPercent,
+      windowMinutes: Math.ceil(windowSeconds / 60),
+      ...(resetDate ? { resetsAt: resetDate.toISOString() } : {}),
+    },
+    ...(windowSeconds === 18_000
+      ? { kind: "session" as const }
+      : windowSeconds === 604_800
+        ? { kind: "weekly" as const }
+        : {}),
   };
 }
 
-export function parseCodexUsagePayload(text: string): UsageReport {
+function classifyCodexWindows(
+  primary: CodexWindow | null,
+  secondary: CodexWindow | null,
+): { primary: UsageWindow | null; secondary: UsageWindow | null; tertiary: null } {
+  let session: UsageWindow | null = null;
+  let weekly: UsageWindow | null = null;
+  const insert = (window: CodexWindow | null, fallback: CodexWindowKind) => {
+    if (!window) return;
+    const kind = window.kind ?? fallback;
+    if (kind === "session") {
+      if (session) throw new Error("duplicate Codex 5h window");
+      session = window.value;
+    } else {
+      if (weekly) throw new Error("duplicate Codex 7d window");
+      weekly = window.value;
+    }
+  };
+  insert(primary, "session");
+  insert(secondary, "weekly");
+  return { primary: session, secondary: weekly, tertiary: null };
+}
+
+export function parseCodexUsagePayload(text: string, now = new Date()): UsageReport {
   const value: unknown = JSON.parse(text);
   if (!isRecord(value) || !isRecord(value.rate_limit)) {
     throw new Error("invalid Codex usage payload");
   }
-  const entry: UsageEntry = {
-    provider: "codex",
-    source: "oauth",
-    usage: {
-      primary: directWindow(value.rate_limit.primary_window, "rate_limit.primary_window"),
-      secondary: directWindow(value.rate_limit.secondary_window, "rate_limit.secondary_window"),
-      tertiary: null,
-    },
-  };
-  if (!entry.usage?.primary && !entry.usage?.secondary) {
+  const usage = classifyCodexWindows(
+    directWindow(value.rate_limit.primary_window, "rate_limit.primary_window", now),
+    directWindow(value.rate_limit.secondary_window, "rate_limit.secondary_window", now),
+  );
+  if (!usage.primary && !usage.secondary) {
     throw new Error("Codex usage payload has no windows");
   }
-  return [entry];
+  return [{ provider: "codex", source: "oauth", usage }];
 }
 
 function cursorPercent(value: unknown, field: string): number | undefined {
@@ -261,10 +303,18 @@ export function parseCodexRateLimitHeaders(
   const primary = readHeaderWindow("primary");
   const secondary = readHeaderWindow("secondary");
   if (!primary && !secondary) return undefined;
+  const classifyHeaderWindow = (window: UsageWindow | null): CodexWindow | null => window && ({
+    value: window,
+    ...(window.windowMinutes === 300
+      ? { kind: "session" as const }
+      : window.windowMinutes === 10_080
+        ? { kind: "weekly" as const }
+        : {}),
+  });
   return [{
     provider: "codex",
     source: "response-headers",
-    usage: { primary, secondary, tertiary: null },
+    usage: classifyCodexWindows(classifyHeaderWindow(primary), classifyHeaderWindow(secondary)),
   }];
 }
 
