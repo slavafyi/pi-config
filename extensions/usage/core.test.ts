@@ -14,6 +14,7 @@ import {
   quotaPercentTone,
   selectCursorQuota,
   selectOpenAiQuota,
+  selectOpenAiQuotas,
   selectQuota,
   styleQuotaStatus,
   type UsageEntry,
@@ -196,7 +197,13 @@ test("normalizes Cursor Agent billing pools", () => {
 
 const now = new Date("2026-08-11T10:00:00Z");
 
-test("uses the useful OpenAI weekly window and accents only percent left", () => {
+test("selects and formats OpenAI quota windows", () => {
+  const quotas = selectOpenAiQuotas(entry("codex"), now);
+  assert.deepEqual(quotas.map(formatQuotaStatus), [
+    "5h:96% ↺3h",
+    "7d:82% ↺4d22h7m",
+  ]);
+
   const quota = selectOpenAiQuota(entry("codex"), now);
   assert.ok(quota);
   assert.equal(quota.usedPercent, 18);

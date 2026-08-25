@@ -44,7 +44,7 @@ const CURSOR_USAGE_URL =
 
 type UsageProvider = "codex" | "cursor";
 type UsageDisplay =
-  | { type: "quota"; quota: QuotaStatus }
+  | { type: "quota"; quotas: QuotaStatus[] }
   | { type: "unavailable"; provider: string }
   | { type: "spinner"; frame: string };
 type UsageAccess =
@@ -307,7 +307,9 @@ export default async function usage(pi: ExtensionAPI) {
   function renderDisplay(ctx: ExtensionContext): string | undefined {
     if (!display) return undefined;
     if (display.type === "quota") {
-      return styleQuotaStatus(display.quota, (tone, text) => ctx.ui.theme.fg(tone, text));
+      return display.quotas
+        .map((quota) => styleQuotaStatus(quota, (tone, text) => ctx.ui.theme.fg(tone, text)))
+        .join("  ");
     }
     if (display.type === "unavailable") {
       const text = display.provider === "cursor" ? "Cursor: unavailable" : "OpenAI: unavailable";
@@ -368,15 +370,15 @@ export default async function usage(pi: ExtensionAPI) {
     }, SPINNER_DELAY_MS);
   }
 
-  function showQuota(
+  function showQuotas(
     ctx: ExtensionContext,
     key: string,
-    quota: QuotaStatus,
+    quotas: QuotaStatus[],
     accountKey: string,
     expiresAt: number,
   ) {
     stopSpinner();
-    setDisplay(ctx, key, { type: "quota", quota }, accountKey);
+    setDisplay(ctx, key, { type: "quota", quotas }, accountKey);
     quotaExpiryTimer = setTimeout(() => {
       if (activeCtx !== ctx || displayKey !== key || displayAccountKey !== accountKey) return;
       setDisplay(ctx, key, undefined, accountKey);
@@ -398,13 +400,13 @@ export default async function usage(pi: ExtensionAPI) {
     provider: string,
     modelId: string,
     accountKey: string,
-  ): { quota: QuotaStatus; expiresAt: number } | undefined {
+  ): { quotas: QuotaStatus[]; expiresAt: number } | undefined {
     const source = USAGE_PROVIDERS[provider];
     const cached = source ? cache.get(source) : undefined;
     if (!source || !isCachedUsageUsable(cached, source, accountKey)) return undefined;
-    const quota = selectQuota(cached.report, provider, modelId).quota;
+    const quotas = selectQuota(cached.report, provider, modelId).quotas;
     const expiresAt = cachedUsageExpiresAt(cached, source);
-    return quota && expiresAt !== undefined ? { quota, expiresAt } : undefined;
+    return quotas?.length && expiresAt !== undefined ? { quotas, expiresAt } : undefined;
   }
 
   async function refresh(ctx: ExtensionContext) {
@@ -446,7 +448,7 @@ export default async function usage(pi: ExtensionAPI) {
       displayAccountKey !== access.accountKey ||
       (display?.type === "quota" && !stale)
     ) {
-      if (stale) showQuota(ctx, key, stale.quota, access.accountKey, stale.expiresAt);
+      if (stale) showQuotas(ctx, key, stale.quotas, access.accountKey, stale.expiresAt);
       else {
         setDisplay(ctx, key, undefined, access.accountKey);
         scheduleSpinner(ctx, key, requestGeneration);
@@ -458,12 +460,12 @@ export default async function usage(pi: ExtensionAPI) {
       const loaded = await loadReport(usageProvider, access);
       if (!isCurrentRequest(ctx, key, requestGeneration)) return;
       const selected = selectQuota(loaded.report, provider, ctx.model?.id ?? modelId);
-      if (selected.quota) {
+      if (selected.quotas?.length) {
         const currentModelId = ctx.model?.id ?? modelId;
         const currentKey = quotaKey(provider, currentModelId);
         const current = cachedQuota(provider, currentModelId, loaded.accountKey);
         if (current) {
-          showQuota(ctx, currentKey, current.quota, loaded.accountKey, current.expiresAt);
+          showQuotas(ctx, currentKey, current.quotas, loaded.accountKey, current.expiresAt);
           return;
         }
       }
@@ -472,7 +474,7 @@ export default async function usage(pi: ExtensionAPI) {
         return;
       }
       const fallback = cachedQuota(provider, modelId, loaded.accountKey);
-      if (fallback) showQuota(ctx, key, fallback.quota, loaded.accountKey, fallback.expiresAt);
+      if (fallback) showQuotas(ctx, key, fallback.quotas, loaded.accountKey, fallback.expiresAt);
       else showUnavailable(ctx, key, provider, loaded.accountKey);
     } catch (error) {
       if (!isCurrentRequest(ctx, key, requestGeneration)) return;
@@ -480,7 +482,7 @@ export default async function usage(pi: ExtensionAPI) {
         ? error.accountKey
         : access.accountKey;
       const fallback = cachedQuota(provider, modelId, accountKey);
-      if (fallback) showQuota(ctx, key, fallback.quota, accountKey, fallback.expiresAt);
+      if (fallback) showQuotas(ctx, key, fallback.quotas, accountKey, fallback.expiresAt);
       else showUnavailable(ctx, key, provider, accountKey);
     }
   }
@@ -514,10 +516,10 @@ export default async function usage(pi: ExtensionAPI) {
     if (!report) return;
     void saveReport("codex", report, accountKey).catch(() => undefined);
     const selected = selectQuota(report, "openai-codex", ctx.model.id);
-    if (!selected.quota || activeCtx !== ctx) return;
+    if (!selected.quotas?.length || activeCtx !== ctx) return;
     const key = quotaKey("openai-codex", ctx.model.id);
     const current = cachedQuota("openai-codex", ctx.model.id, accountKey);
-    if (current) showQuota(ctx, key, current.quota, accountKey, current.expiresAt);
+    if (current) showQuotas(ctx, key, current.quotas, accountKey, current.expiresAt);
   });
 
   pi.on("message_end", (event) => {

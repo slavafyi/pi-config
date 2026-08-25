@@ -117,13 +117,13 @@ test("classifies fixed status slots independently of Map order", () => {
   const classified = classifyStatuses(new Map([
     ["z-extra", "extra"],
     ["plan-mode", "\x1b[33m⏸︎ plan\x1b[0m"],
-    ["usage", "7d:94% left (↺in 5d13h)"],
+    ["usage", "5h:88% left (↺in 2h)  7d:94% left (↺in 5d13h)"],
     ["mcp", "🔌 MCP: 0/2"],
     ["subagents", "2 running agents, 1 queued"],
   ]));
   const known = normalizeKnownStatuses(classified.known);
   assert.deepEqual(classified.unknown, ["extra"]);
-  assert.equal(known.usage, "7d:94% ↺5d13h");
+  assert.equal(known.usage, "5h:88% ↺2h  7d:94% ↺5d13h");
   assert.equal(known.mcp, "MCP:0/2");
   assert.equal(known.agents, "agents:2+1q");
   assert.equal(known.plan, "⏸︎ plan");
