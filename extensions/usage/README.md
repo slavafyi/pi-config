@@ -62,10 +62,11 @@ When no usable cached status is available, a request that takes longer than 150
 milliseconds shows a spinner. Headless sessions skip quota requests but still
 add Cursor cost estimates.
 
-The extension publishes the compact display form directly:
+The extension publishes the compact display form directly. When Codex reports
+both quota windows, both are shown:
 
 ```text
-7d:82% ↺4d22h7m
+5h:96% ↺3h  7d:82% ↺4d22h7m
 cursor:99% ↺30d4h
 other:97% ↺30d4h
 ```
@@ -76,7 +77,8 @@ preserves those ANSI colors while positioning and truncating the status
 responsively. When the footer is invalidated, the extension restyles its saved
 semantic status with the current theme without making another request.
 
-OpenAI prefers the weekly Codex window. Cursor shows `cursor` for models listed
+OpenAI shows every reported Codex window, with the five-hour window first.
+Cursor shows `cursor` for models listed
 by Cursor in its automatic model bucket and `other` for explicitly selected
 third-party models. Router/Auto shows `total` because its selected model can
 change between turns. When the preferred category is unavailable, the

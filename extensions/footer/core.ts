@@ -143,9 +143,11 @@ export function classifyStatuses(statuses: ReadonlyMap<string, string>): Classif
 export function normalizeUsage(text: string | undefined): string | undefined {
   if (!text) return undefined;
   const clean = plainStatus(text);
-  const match = clean.match(/(?:^|\s)([^\s:]+):\s*(\d+(?:\.\d+)?)%\s*(?:left)?(?:\s*\(?↺\s*(?:in\s*)?([^\s)]+)\)?)?/i);
-  if (!match) return clean || undefined;
-  return `${match[1]}:${match[2]}%${match[3] ? ` ↺${match[3]}` : ""}`;
+  const matches = clean.matchAll(/(?:^|\s)([^\s:]+):\s*(\d+(?:\.\d+)?)%\s*(?:left)?(?:\s*\(?↺\s*(?:in\s*)?([^\s)]+)\)?)?/gi);
+  const quotas = Array.from(matches, (match) =>
+    `${match[1]}:${match[2]}%${match[3] ? ` ↺${match[3]}` : ""}`
+  );
+  return quotas.length ? quotas.join("  ") : clean || undefined;
 }
 
 export function normalizeMcp(text: string | undefined): { text?: string; error: boolean } {
@@ -461,7 +463,7 @@ function renderParts(
 function buildBlocks(input: FooterLayoutInput, state: VariantState): { left: string; right: string } {
   const left: FooterPart[] = [];
   if (input.metrics.quota) {
-    const text = input.metrics.quota.replace(/(\d+(?:\.\d+)?)%/, (value) =>
+    const text = input.metrics.quota.replace(/(\d+(?:\.\d+)?)%/g, (value) =>
       formatPercent(Number.parseFloat(value), state.percentDigits),
     );
     const styled = preservesText(input.metrics.quotaStyled, text)

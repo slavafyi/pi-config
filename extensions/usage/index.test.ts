@@ -20,6 +20,12 @@ const report = JSON.stringify({
     secondary_window: { used_percent: 18, limit_window_seconds: 604_800 },
   },
 });
+const reportWithBothWindows = JSON.stringify({
+  rate_limit: {
+    primary_window: { used_percent: 12, limit_window_seconds: 18_000 },
+    secondary_window: { used_percent: 34, limit_window_seconds: 604_800 },
+  },
+});
 const token = [
   "header",
   Buffer.from(JSON.stringify({
@@ -202,16 +208,19 @@ test("keeps the spinner moving when Pi supplies a new event context", async (t) 
   await state.handlers.get("session_shutdown")?.({}, nextCtx);
 });
 
-test("cancels a delayed spinner when direct usage responds quickly", async (t) => {
+test("shows both Codex windows when direct usage responds quickly", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
-  t.mock.method(globalThis, "fetch", async () => new Response(report));
+  t.mock.method(globalThis, "fetch", async () => new Response(reportWithBothWindows));
   const state = await setup();
 
   state.handlers.get("session_start")?.({}, state.ctx);
   await flushPromises();
   t.mock.timers.tick(200);
 
-  assert.deepEqual(state.statuses, [undefined, "light:dim:7d:light:accent:82%"]);
+  assert.deepEqual(state.statuses, [
+    undefined,
+    "light:dim:5h:light:accent:88%  light:dim:7d:light:accent:66%",
+  ]);
   await state.handlers.get("session_shutdown")?.({}, state.ctx);
 });
 

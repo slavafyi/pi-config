@@ -24,7 +24,7 @@ The footer groups provider and runtime statuses on the left and session metrics
 on the right:
 
 ```text
-7d:94% ↺5d13h  MCP:0/2  agents:2  ⏸︎ plan    cache:98.1%  ctx:12%/272k  $1.134
+5h:96% ↺3h  7d:94% ↺5d13h  MCP:0/2    cache:98.1%  ctx:12%/272k  $1.134
 ```
 
 A non-Git directory shows its folder name in the editor border outside tmux and
@@ -68,7 +68,7 @@ absent when there are no unknown statuses.
 
 ## Session metrics
 
-The left block starts with the subscription quota supplied by `usage`. The
+The left block starts with the subscription quotas supplied by `usage`. The
 right block includes:
 
 - the latest assistant message's prompt-cache hit rate;

@@ -347,6 +347,12 @@ function quota(value: UsageWindow, window: string, now: Date, pool?: string): Qu
   };
 }
 
+export function selectOpenAiQuotas(entry: UsageEntry, now = new Date()): QuotaStatus[] {
+  return [entry.usage?.primary, entry.usage?.secondary]
+    .filter((value): value is UsageWindow => Boolean(value))
+    .map((value) => quota(value, windowLabel(value.windowMinutes), now));
+}
+
 export function selectOpenAiQuota(entry: UsageEntry, now = new Date()): QuotaStatus | undefined {
   const value = entry.usage?.secondary ?? entry.usage?.primary;
   return value ? quota(value, windowLabel(value.windowMinutes), now) : undefined;
@@ -426,19 +432,16 @@ export function selectQuota(
   provider: string,
   modelId: string,
   now = new Date(),
-): { entry?: UsageEntry; quota?: QuotaStatus } {
+): { entry?: UsageEntry; quota?: QuotaStatus; quotas?: QuotaStatus[] } {
   const id = provider === "openai-codex" ? "codex" : provider;
   const entry = report.find((candidate) => candidate.provider === id);
   if (!entry || entry.error) return { entry };
-  return {
-    entry,
-    quota:
-      provider === "openai-codex"
-        ? selectOpenAiQuota(entry, now)
-        : provider === "cursor"
-          ? selectCursorQuota(entry, modelId, now)
-          : undefined,
-  };
+  if (provider === "openai-codex") {
+    const quotas = selectOpenAiQuotas(entry, now);
+    return { entry, quota: selectOpenAiQuota(entry, now), quotas };
+  }
+  const quota = provider === "cursor" ? selectCursorQuota(entry, modelId, now) : undefined;
+  return { entry, quota, ...(quota ? { quotas: [quota] } : {}) };
 }
 
 export type QuotaTone = "dim" | "accent" | "warning" | "error";
