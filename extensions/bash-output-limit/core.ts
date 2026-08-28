@@ -1,3 +1,4 @@
+import { StringDecoder } from "node:string_decoder";
 import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import {
   DEFAULT_MAX_LINES,
@@ -19,6 +20,7 @@ export interface BashOutputLimitInput {
   details?: BashToolDetails;
   maxKiB: number;
   saveFullOutput: (output: string) => Promise<string>;
+  readFullOutputHead?: (path: string, maxBytes: number) => Promise<string>;
 }
 
 export interface BashOutputLimitPatch {
@@ -46,6 +48,24 @@ function stripExistingNotice(text: string, fullOutputPath: string | undefined): 
   return text.slice(0, footerStart);
 }
 
+function takeHeadUtf8(text: string, maxBytes: number): string {
+  const bytes = Buffer.from(text, "utf8");
+  if (bytes.length <= maxBytes) return text;
+  return new StringDecoder("utf8").write(bytes.subarray(0, maxBytes));
+}
+
+function countLines(text: string): number {
+  if (!text) return 0;
+  const lines = text.split("\n").length;
+  return text.endsWith("\n") ? lines - 1 : lines;
+}
+
+function joinWindows(head: string, marker: string, tail: string): string {
+  const headSeparator = head.endsWith("\n") ? "" : "\n";
+  const tailSeparator = tail.startsWith("\n") ? "" : "\n";
+  return `${head}${headSeparator}${marker}${tailSeparator}${tail}`;
+}
+
 export async function limitBashOutput(
   input: BashOutputLimitInput,
 ): Promise<BashOutputLimitPatch | undefined> {
@@ -60,30 +80,50 @@ export async function limitBashOutput(
   const maxBytes = input.maxKiB * 1024;
   if (Buffer.byteLength(body, "utf8") <= maxBytes) return undefined;
 
+  const headBytes = Math.floor(maxBytes / 5);
+  const tailBytes = maxBytes - headBytes;
   let fullOutputPath = existingPath;
-  if (!fullOutputPath) {
-    try {
+  let head: string;
+  try {
+    if (fullOutputPath) {
+      if (!input.readFullOutputHead) return undefined;
+      head = await input.readFullOutputHead(fullOutputPath, headBytes);
+    } else {
       fullOutputPath = await input.saveFullOutput(text);
-    } catch {
-      return undefined;
+      head = takeHeadUtf8(body, headBytes);
     }
+  } catch {
+    return undefined;
   }
 
-  const narrowed = truncateTail(body, {
-    maxBytes,
+  const tail = truncateTail(body, {
+    maxBytes: tailBytes,
     maxLines: DEFAULT_MAX_LINES,
   });
   const existingTruncation = input.details?.truncation;
+  const totalLines = existingTruncation?.totalLines ?? tail.totalLines;
+  const totalBytes = existingTruncation?.totalBytes ?? tail.totalBytes;
+  const retainedBytes = Buffer.byteLength(head, "utf8") + tail.outputBytes;
+  const omittedBytes = Math.max(0, totalBytes - retainedBytes);
+  const marker = `[... output truncated: ${formatSize(omittedBytes)} omitted ...]`;
+  const truncatedContent = joinWindows(head, marker, tail.content);
   const truncation = {
-    ...narrowed,
-    totalLines: existingTruncation?.totalLines ?? narrowed.totalLines,
-    totalBytes: existingTruncation?.totalBytes ?? narrowed.totalBytes,
+    content: truncatedContent,
+    truncated: true,
+    truncatedBy: "bytes" as const,
+    totalLines,
+    totalBytes,
+    outputLines: countLines(head) + tail.outputLines + 1,
+    outputBytes: retainedBytes,
+    lastLinePartial: tail.lastLinePartial,
+    firstLineExceedsLimit: false,
+    maxLines: DEFAULT_MAX_LINES,
+    maxBytes,
   };
-  const startLine = Math.max(1, truncation.totalLines - truncation.outputLines + 1);
-  const notice = `[Showing lines ${startLine}-${truncation.totalLines} of ${truncation.totalLines} (${formatSize(maxBytes)} limit). Full output: ${fullOutputPath}]`;
+  const notice = `[Output truncated: showing first ${formatSize(headBytes)} and last ${formatSize(tailBytes)} of ${formatSize(totalBytes)}. Full output: ${fullOutputPath}]`;
   const content = input.content.map((block) =>
     block === textBlock
-      ? { ...block, text: `${narrowed.content}\n\n${notice}` }
+      ? { ...block, text: `${truncatedContent}\n\n${notice}` }
       : block,
   );
 

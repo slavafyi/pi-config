@@ -56,8 +56,8 @@ test("treats 50 KiB as native Pi behavior", async () => {
   assert.equal(saved, false);
 });
 
-test("keeps a UTF-8-safe tail and saves complete output", async () => {
-  const original = `${"prefix\n".repeat(3000)}${"🙂".repeat(6000)}\nCommand exited with code 1`;
+test("keeps UTF-8-safe head and tail windows and saves complete output", async () => {
+  const original = `HEADER 🙂\n${"prefix\n".repeat(3000)}${"🙂".repeat(6000)}\nCommand exited with code 1`;
   let savedOutput: string | undefined;
   const result = await limitBashOutput({
     content: textContent(original),
@@ -71,13 +71,15 @@ test("keeps a UTF-8-safe tail and saves complete output", async () => {
   assert.ok(result);
   assert.equal(savedOutput, original);
   const output = outputText(result.content);
-  const body = output.slice(0, output.lastIndexOf("\n\n[Showing lines"));
-  assert.ok(Buffer.byteLength(body, "utf8") <= 10 * 1024);
-  assert.equal(body.includes("�"), false);
-  assert.ok(body.endsWith("Command exited with code 1"));
+  assert.ok(output.startsWith("HEADER 🙂"));
+  assert.ok(output.includes("[... output truncated:"));
+  assert.equal(output.includes("�"), false);
+  assert.ok(output.includes("Command exited with code 1"));
+  assert.ok(output.includes("showing first 2.0KB and last 8.0KB"));
   assert.ok(output.endsWith("Full output: /tmp/pi-bash-full.log]"));
   assert.equal(result.details.fullOutputPath, "/tmp/pi-bash-full.log");
   assert.equal(result.details.truncation?.maxBytes, 10 * 1024);
+  assert.ok((result.details.truncation?.outputBytes ?? Infinity) <= 10 * 1024);
 });
 
 test("reuses Pi full output path and source totals", async () => {
@@ -86,6 +88,7 @@ test("reuses Pi full output path and source totals", async () => {
   const piPath = "/tmp/pi-bash-existing.log";
   const piText = `${piTruncation.content}\n\n[Showing lines 3001-5000 of 5000. Full output: ${piPath}]`;
   let saved = false;
+  let requestedHeadBytes: number | undefined;
 
   const result = await limitBashOutput({
     content: textContent(piText),
@@ -95,14 +98,23 @@ test("reuses Pi full output path and source totals", async () => {
       saved = true;
       return "/tmp/unused";
     },
+    readFullOutputHead: async (path, maxBytes) => {
+      assert.equal(path, piPath);
+      requestedHeadBytes = maxBytes;
+      return original.slice(0, maxBytes);
+    },
   });
 
   assert.ok(result);
   assert.equal(saved, false);
+  assert.equal(requestedHeadBytes, 4 * 1024);
   assert.equal(result.details.fullOutputPath, piPath);
   assert.equal(result.details.truncation?.totalLines, piTruncation.totalLines);
   assert.equal(result.details.truncation?.totalBytes, piTruncation.totalBytes);
   const output = outputText(result.content);
+  assert.ok(output.startsWith("line 1 "));
+  assert.ok(output.includes("[... output truncated:"));
+  assert.ok(output.includes("line 5000 "));
   assert.equal(output.match(/Full output:/g)?.length, 1);
   assert.ok(output.endsWith(`Full output: ${piPath}]`));
 });

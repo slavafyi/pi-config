@@ -24,9 +24,14 @@ nothing when the file, section, or `maxKiB` key is absent, or when the value is
 invalid. A value of `50` preserves Pi's built-in limit without additional
 processing.
 
-For smaller values, the extension keeps the final `maxKiB` of command output.
-If Pi already saved the full output, the extension reuses that path. Otherwise,
-it saves the complete result to a mode-`0600` temporary file. The truncation
-notice is additional to the configured output-body limit.
+For smaller values, the extension keeps 20% from the start and 80% from the
+end of the command output. For example, a 20 KiB limit keeps the first 4 KiB
+and last 16 KiB. An explicit marker and footer tell the model that the middle
+was omitted and provide the full-output path.
+
+If Pi already saved the full output, the extension reads only the required head
+window from that file and reuses its path. Otherwise, it saves the complete
+result to a mode-`0600` temporary file. Markers and notices are additional to
+the configured output-body limit.
 
 Run `/reload` after changing the file.
