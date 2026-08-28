@@ -79,10 +79,15 @@ of one. Pi's default agents are disabled in favor of these definitions.
 
 | Extension | What it provides |
 |-----------|------------------|
+| `bash-output-limit` | Configurable final-output limit for the built-in bash tool, with full-output spill to a temporary file |
 | `footer` | Responsive project, model, extension-status, quota, cache, context, and cost footer |
 | `plan-mode` | Read-only planning with cache-preserving execution transitions |
 | `usage` | Codex and Cursor quota status and Cursor cost estimates |
 | `with-agents` | `/with-agents` policy gate for subagent orchestration |
+
+Extension-specific settings are namespaced under `extensions` in
+`user-settings.json`. An extension remains inactive when its required section
+or key is absent.
 
 ## Packages
 

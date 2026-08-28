@@ -54,12 +54,16 @@ and error colors at the same thresholds as Pi's built-in footer; the label and
 context-window size stay dim.
 
 Unknown extension statuses are hidden by default. To show their sanitized
-values on a separate second line, enable the footer-specific setting in
-`$PI_CODING_AGENT_DIR/footer.json` and run `/reload`:
+values on a separate second line, enable the footer section in
+`$PI_CODING_AGENT_DIR/user-settings.json` and run `/reload`:
 
 ```json
 {
-  "showUnknownStatuses": true
+  "extensions": {
+    "footer": {
+      "showUnknownStatuses": true
+    }
+  }
 }
 ```
 
