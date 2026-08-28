@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import { CustomEditor, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
@@ -15,18 +14,11 @@ import {
   type FooterRole,
   type SessionEntryLike,
 } from "./core.ts";
+import { loadExtensionSettings } from "../shared/user-settings.ts";
 import { emitFooterInvalidate } from "./events.ts";
 
 function loadConfig() {
-  const codingAgentDir = process.env.PI_CODING_AGENT_DIR;
-  if (!codingAgentDir) return parseFooterConfig(undefined);
-  try {
-    return parseFooterConfig(
-      JSON.parse(readFileSync(join(codingAgentDir, "footer.json"), "utf8")),
-    );
-  } catch {
-    return parseFooterConfig(undefined);
-  }
+  return parseFooterConfig(loadExtensionSettings("footer"));
 }
 
 export default function footer(pi: ExtensionAPI) {

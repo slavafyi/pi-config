@@ -1,0 +1,10 @@
+{
+  "extensions": {
+    "bash-output-limit": {
+      "maxKiB": 20
+    },
+    "footer": {
+      "showUnknownStatuses": false
+    }
+  }
+}
