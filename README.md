@@ -105,6 +105,7 @@ Packages are declared in `settings.json` and pinned to immutable git commits or 
 | [pi-cursor-sdk](https://github.com/fitchmultz/pi-cursor-sdk) | Cursor SDK agents inside Pi |
 | [pi-transcribe](https://github.com/earendil-works/pi-transcribe) | Local speech-to-text dictation |
 | [pi-context-view](https://github.com/dimk90/pi-context-view) | Context usage visualization and inspection of system prompt, tools, and extension injections |
+| [pi-copy-code](https://github.com/penumbral-labs/pi-copy-code) | Copy fenced code blocks from recent assistant messages |
 | [pi-session-recall](https://www.npmjs.com/package/@ogulcancelik/pi-session-recall) | Search across previous sessions |
 
 Pi packages run with full system access. Review third-party package source code
