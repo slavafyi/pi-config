@@ -10,6 +10,7 @@ Read-only exploration mode for safe code analysis.
 - **Progress tracking**: Widget shows completion status during execution
 - **[DONE:n] markers**: Explicit step completion tracking
 - **Session persistence**: State survives session resume
+- **Local completion history**: Completed plans remain visible without entering model context
 - **Theme updates**: Footer status and progress widget follow theme changes
 
 ## Commands
@@ -55,6 +56,7 @@ instructions in context.
 - Agent executes steps in order
 - `[DONE:n]` markers track completion
 - Widget shows progress
+- Completed plans render as TUI-only session entries
 
 ### Command Allowlist
 

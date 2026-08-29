@@ -6,6 +6,7 @@ import planMode, { MODE_GUARD_PROMPT } from "./index.ts";
 function createHarness(initialEntries: any[] = []) {
 	const handlers = new Map<string, (event: any, ctx: any) => any>();
 	const eventHandlers = new Map<string, (data: unknown) => void>();
+	const entryRenderers = new Map<string, (entry: any, options: any, theme: any) => any>();
 	const commands = new Map<string, (args: string, ctx: any) => Promise<void>>();
 	const setActiveToolsCalls: string[][] = [];
 	const sentMessages: Array<{ message: any; options: any }> = [];
@@ -33,6 +34,8 @@ function createHarness(initialEntries: any[] = []) {
 			command: { handler: (args: string, ctx: any) => Promise<void> },
 		) => commands.set(name, command.handler),
 		registerShortcut: () => {},
+		registerEntryRenderer: (customType: string, renderer: (entry: any, options: any, theme: any) => any) =>
+			entryRenderers.set(customType, renderer),
 		appendEntry: (customType: string, data: unknown) => entries.push({ type: "custom", customType, data }),
 		setActiveTools: (tools: string[]) => setActiveToolsCalls.push(tools),
 		sendMessage: (message: any, options: any) => {
@@ -73,6 +76,7 @@ function createHarness(initialEntries: any[] = []) {
 		commands,
 		ctx,
 		entries,
+		entryRenderers,
 		eventHandlers,
 		handlers,
 		sentMessages,
@@ -92,6 +96,8 @@ test("publishes only plan state transitions while preserving progress UI", async
 	const {
 		commands,
 		ctx,
+		entries,
+		entryRenderers,
 		eventHandlers,
 		handlers,
 		sentMessages,
@@ -174,9 +180,37 @@ test("publishes only plan state transitions while preserving progress UI", async
 	assert.match(updatedExecution.message.content, /Apply the focused fix/);
 	assert.equal((await startAgent()).message, undefined);
 
+	await handlers.get("turn_end")?.(
+		{
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "The second step is complete. [DONE:2]" }],
+			},
+		},
+		ctx,
+	);
+	assert.equal(statuses.at(-1), "dark:accent:● 2/2");
+	await handlers.get("agent_end")?.({ messages: [] }, ctx);
+	assert.equal(statuses.at(-1), undefined);
+	assert.equal(widgets.at(-1), undefined);
+	assert.equal(sentMessages.length, 1);
+
+	const completionEntry = entries.find((entry) => entry.type === "custom" && entry.customType === "plan-complete");
+	assert.deepEqual(completionEntry?.data, {
+		items: ["Inspect the cache behavior", "Apply the focused fix"],
+	});
+	const completionRenderer = entryRenderers.get("plan-complete");
+	assert.ok(completionRenderer);
+	const completionComponent = completionRenderer(completionEntry, {}, {
+		bold: (text: string) => `**${text}**`,
+		fg: (tone: string, text: string) => `${tone}:${text}`,
+	});
+	assert.match(completionComponent.render(80).join("\n"), /success:\*\*✓ Plan Complete\*\*/);
+	assert.match(completionComponent.render(80).join("\n"), /muted:Apply the focused fix/);
+
 	harness.setThemeName("light-again");
 	eventHandlers.get("footer:invalidate")?.(undefined);
-	assert.ok(widgets.at(-1)?.some((line) => line.includes("light-again:muted:")));
+	assert.equal(widgets.at(-1), undefined);
 
 	handlers.get("session_shutdown")?.({}, ctx);
 	assert.equal(statuses.at(-1), undefined);

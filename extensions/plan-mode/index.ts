@@ -15,7 +15,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key } from "@earendil-works/pi-tui";
+import { Key, Text } from "@earendil-works/pi-tui";
 import { FOOTER_INVALIDATE_EVENT } from "../footer/events.ts";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
@@ -30,6 +30,10 @@ interface PlanModeState {
 	enabled: boolean;
 	todos?: TodoItem[];
 	executing?: boolean;
+}
+
+interface PlanCompleteData {
+	items: string[];
 }
 
 type PlanStateKind = "normal" | "planning" | "executing";
@@ -74,6 +78,15 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		description: "Start in plan mode (read-only exploration)",
 		type: "boolean",
 		default: false,
+	});
+
+	pi.registerEntryRenderer("plan-complete", (entry, _options, theme) => {
+		const data = entry.data as PlanCompleteData | undefined;
+		const lines = [theme.fg("success", theme.bold("✓ Plan Complete"))];
+		for (const item of data?.items ?? []) {
+			lines.push(`${theme.fg("success", "✓ ")}${theme.fg("muted", item)}`);
+		}
+		return new Text(lines.join("\n"), 1, 0);
 	});
 
 	function publishStatus(ctx: ExtensionContext, next: string | undefined): void {
@@ -303,11 +316,9 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		// Check if execution is complete
 		if (executionMode && todoItems.length > 0) {
 			if (todoItems.every((t) => t.completed)) {
-				const completedList = todoItems.map((t) => `~~${t.text}~~`).join("\n");
-				pi.sendMessage(
-					{ customType: "plan-complete", content: `**Plan Complete!** ✓\n\n${completedList}`, display: true },
-					{ triggerTurn: false },
-				);
+				pi.appendEntry<PlanCompleteData>("plan-complete", {
+					items: todoItems.map((item) => item.text),
+				});
 				executionMode = false;
 				todoItems = [];
 				updateStatus(ctx);
