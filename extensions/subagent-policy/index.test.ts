@@ -5,7 +5,7 @@ import subagentPolicy, { formatContextUsage, SUBAGENT_POLICY_PROMPT } from "./in
 assert.equal(formatContextUsage(undefined), undefined);
 assert.equal(
   formatContextUsage({ tokens: 120_000, contextWindow: 200_000, percent: 60 }),
-  "Parent context: 120,000/200,000 tokens used (60.0%); 80,000 tokens remain (40.0%).",
+  "Parent context remaining: 80,000/200,000 tokens.",
 );
 assert.equal(
   formatContextUsage({ tokens: null, contextWindow: 200_000, percent: null }),
@@ -52,14 +52,14 @@ const firstStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }
 const secondStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
 assert.equal(firstStart.systemPrompt, `base\n\n${SUBAGENT_POLICY_PROMPT}`);
 assert.equal(secondStart.systemPrompt, firstStart.systemPrompt);
-assert.doesNotMatch(firstStart.systemPrompt, /120,000\/200,000 tokens used/);
+assert.doesNotMatch(firstStart.systemPrompt, /Parent context remaining/);
 
 const stableMessages = [{ role: "user", content: "task", timestamp: 1 }];
 const firstContext = handlers.get("context")?.({ messages: stableMessages }, ctx);
 assert.equal(stableMessages.length, 1);
 assert.equal(firstContext.messages.length, 2);
 assert.equal(firstContext.messages[1].customType, "subagent-policy-context-usage");
-assert.match(firstContext.messages[1].content, /120,000\/200,000 tokens used/);
+assert.equal(firstContext.messages[1].content, "Parent context remaining: 80,000/200,000 tokens.");
 
 contextUsage = { tokens: 130_000, contextWindow: 200_000, percent: 65 };
 const newTail = [
@@ -70,7 +70,7 @@ const secondContext = handlers.get("context")?.({ messages: [...stableMessages, 
 assert.deepEqual(secondContext.messages.slice(0, stableMessages.length), stableMessages);
 assert.deepEqual(secondContext.messages.slice(stableMessages.length, -1), newTail);
 assert.equal(secondContext.messages.at(-1).customType, "subagent-policy-context-usage");
-assert.match(secondContext.messages.at(-1).content, /130,000\/200,000 tokens used/);
+assert.equal(secondContext.messages.at(-1).content, "Parent context remaining: 70,000/200,000 tokens.");
 assert.deepEqual(
   secondContext.messages
     .slice(stableMessages.length)

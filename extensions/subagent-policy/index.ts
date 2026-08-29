@@ -32,9 +32,7 @@ export function formatContextUsage(usage: ContextUsage | undefined): string | un
   }
 
   const remaining = Math.max(0, usage.contextWindow - usage.tokens);
-  const usedPercent = usage.percent ?? (usage.tokens / usage.contextWindow) * 100;
-  const remainingPercent = Math.max(0, 100 - usedPercent);
-  return `Parent context: ${usage.tokens.toLocaleString("en-US")}/${usage.contextWindow.toLocaleString("en-US")} tokens used (${usedPercent.toFixed(1)}%); ${remaining.toLocaleString("en-US")} tokens remain (${remainingPercent.toFixed(1)}%).`;
+  return `Parent context remaining: ${remaining.toLocaleString("en-US")}/${usage.contextWindow.toLocaleString("en-US")} tokens.`;
 }
 
 export default function subagentPolicy(pi: ExtensionAPI) {
