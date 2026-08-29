@@ -43,6 +43,12 @@ Plan:
 - Bash commands filtered through allowlist
 - Agent creates a plan without making changes
 
+Mode state messages are append-only so earlier provider prompt prefixes remain
+cacheable. A short, stable system instruction tells the model that the newest
+state message supersedes earlier mode messages. That instruction is required;
+without it, resumed sessions and mode changes can leave contradictory active
+instructions in context.
+
 ### Execution Mode
 - Full tool access restored
 - Agent executes steps in order

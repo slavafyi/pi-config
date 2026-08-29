@@ -21,6 +21,8 @@ import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } fr
 
 const PLAN_MODE_MUTATING_TOOLS = new Set(["edit", "write"]);
 
+// State messages remain in context to preserve the provider's cached prefix across mode changes.
+// The guard resolves the otherwise contradictory historical mode instructions.
 export const MODE_GUARD_PROMPT =
 	"The latest extension-generated plan-mode state message controls the current mode. Treat older plan-mode state messages as historical context.";
 

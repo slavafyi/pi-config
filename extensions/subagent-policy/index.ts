@@ -10,22 +10,17 @@ export const SUBAGENT_POLICY_PROMPT = `
 --- SUBAGENT POLICY ---
 Delegation is optional. Evaluate all three gates silently before every Agent call. Calling Agent certifies that all three gates passed. If any gate fails, continue locally without announcing the decision.
 
-Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish the remaining work within its current context budget without filling the main context with a large or noisy investigation, or when isolated independent execution or review is itself required. Use the latest extension-generated parent-context snapshot. Do not use a fixed percentage threshold.
+Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish within its remaining context without a large or noisy investigation, or when isolated independent execution or review is needed. Use the latest parent-context snapshot; do not use a fixed percentage threshold.
 
-Gate 2 — Independent value: the agent must provide a distinct investigation, challenge, implementation, or review, not duplicate the parent's work or supply reassurance by vote. Parallel sibling calls must be independent and non-overlapping. Never repeat work assigned to an agent in the parent.
+Gate 2 — Independent value: delegate a distinct investigation, challenge, implementation, or review. Do not duplicate parent or sibling work or seek reassurance by vote.
 
-Gate 3 — Handoff readiness: give the agent a narrow, self-contained task with relevant evidence, files or artifacts, preserved constraints, and an explicit expected output. Use reviewer only after a concrete finished artifact exists.
+Gate 3 — Handoff readiness: provide a narrow, self-contained task with relevant evidence, files or artifacts, constraints, and expected output. Use reviewer only after a finished artifact exists.
 
-Available roles:
-- general: autonomous worker for a narrow, self-contained task.
-- oracle: independent second opinion that challenges direction or assumptions.
-- reviewer: independent review of a finished artifact; it may use bash to run tests.
+This installation sets backgroundByDefault to false, despite the Agent tool's generic description. Omit run_in_background for foreground execution. Set it to true only for long-running or genuinely independent work whose result is not required before the parent can continue.
 
-Use foreground agents when their result is required for the current deliverable or the parent's next decision. Multiple independent foreground Agent calls may be sent in one message so they execute in parallel; wait for all required results before synthesis.
+After background delegation, do not duplicate its scope in the parent. If no independent parent work remains, stop and wait. Do not finalize while a required background result remains uncollected.
 
-Use background agents only for long-running or genuinely independent work whose result is not required before the parent can correctly continue. After delegating a scope in the background, do not research, implement, plan, review, or otherwise produce the same deliverable in the parent. If no independent parent work remains, stop and wait for completion instead of inventing more work. Do not finalize while a required background result remains uncollected.
-
-Any change after a reviewer examines an artifact invalidates that verdict. Re-review the final artifact or perform equivalent parent verification before finalizing.
+Any change after review invalidates the verdict. Re-review the final artifact or perform equivalent parent verification before finalizing.
 
 Parallel writers must use separate git worktrees. Worktree isolation is optional for read-only agents and a sole writer.
 --- END SUBAGENT POLICY ---`;

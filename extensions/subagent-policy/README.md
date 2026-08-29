@@ -20,19 +20,20 @@ Calling `Agent` is the model's self-attestation that all gates passed. These are
 semantic policy checks, not a security boundary; the extension cannot prove
 that a task is useful or non-overlapping.
 
+The policy does not repeat the Agent tool's role list, general tool-selection
+guidance, prompt-writing guidance, or result-verification guidance.
+
 ## Foreground and background
 
-Tintinweb is configured with `backgroundByDefault: false`.
+Tintinweb is configured with `backgroundByDefault: false`. Its generic Agent
+tool description currently says that background execution is the default, so
+the policy explicitly corrects that mismatch for this installation.
 
-Use foreground agents when the parent needs their result for its current
-deliverable or next decision. Independent foreground calls sent in one tool
-batch execute in parallel, and the parent receives their results before it
-continues.
-
-Use explicit background execution only for long-running or genuinely
-independent work. The parent must not duplicate the delegated scope, invent
-work merely to stay busy, or finalize while a required result is uncollected.
-Smart join consolidates sibling completion notifications.
+Omitting `run_in_background` runs the agent in the foreground. Set it to `true`
+only for long-running or genuinely independent work. The parent must not
+duplicate the delegated scope, invent work merely to stay busy, or finalize
+while a required result is uncollected. Smart join consolidates sibling
+completion notifications.
 
 Parallel writers require separate worktrees. Read-only agents and a sole writer
 do not require worktree isolation.

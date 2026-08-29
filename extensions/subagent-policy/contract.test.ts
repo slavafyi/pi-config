@@ -13,21 +13,22 @@ assert.equal(
 );
 
 assert.match(SUBAGENT_POLICY_PROMPT, /Calling Agent certifies that all three gates passed/);
-assert.match(SUBAGENT_POLICY_PROMPT, /Use foreground agents when their result is required/);
+assert.match(SUBAGENT_POLICY_PROMPT, /backgroundByDefault to false/);
 assert.match(
   SUBAGENT_POLICY_PROMPT,
-  /Use background agents only for long-running or genuinely independent work/,
+  /Set it to true only for long-running or genuinely independent work/,
 );
-assert.match(SUBAGENT_POLICY_PROMPT, /do not research, implement, plan, review/);
+assert.match(SUBAGENT_POLICY_PROMPT, /do not duplicate its scope in the parent/);
 assert.match(
   SUBAGENT_POLICY_PROMPT,
   /Do not finalize while a required background result remains uncollected/,
 );
 assert.match(
   SUBAGENT_POLICY_PROMPT,
-  /Any change after a reviewer examines an artifact invalidates that verdict/,
+  /Any change after review invalidates the verdict/,
 );
 assert.match(SUBAGENT_POLICY_PROMPT, /Parallel writers must use separate git worktrees/);
+assert.doesNotMatch(SUBAGENT_POLICY_PROMPT, /Available roles/);
 assert.doesNotMatch(SUBAGENT_POLICY_PROMPT, /Prefer background agents for parallel fan-out/);
 
 const handlers = new Map<string, (event: any, ctx: any) => any>();
