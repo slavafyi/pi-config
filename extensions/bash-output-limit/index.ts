@@ -20,7 +20,11 @@ async function saveFullOutput(output: string): Promise<string> {
   return path;
 }
 
-async function readFullOutputHead(path: string, maxBytes: number): Promise<string> {
+async function readFullOutputWindows(
+  path: string,
+  headBytes: number,
+  tailBytes: number,
+) {
   const relativePath = relative(tmpdir(), path);
   if (
     relativePath === ".." ||
@@ -33,9 +37,31 @@ async function readFullOutputHead(path: string, maxBytes: number): Promise<strin
 
   const file = await open(path, "r");
   try {
-    const buffer = Buffer.alloc(maxBytes);
-    const { bytesRead } = await file.read(buffer, 0, maxBytes, 0);
-    return new StringDecoder("utf8").write(buffer.subarray(0, bytesRead));
+    const { size } = await file.stat();
+    const headBuffer = Buffer.alloc(Math.min(headBytes, size));
+    const tailPosition = Math.max(0, size - tailBytes - 1);
+    const tailBuffer = Buffer.alloc(size - tailPosition);
+    const [{ bytesRead: headBytesRead }, { bytesRead: tailBytesRead }] = await Promise.all([
+      file.read(headBuffer, 0, headBuffer.length, 0),
+      file.read(tailBuffer, 0, tailBuffer.length, tailPosition),
+    ]);
+
+    const head = new StringDecoder("utf8").write(headBuffer.subarray(0, headBytesRead));
+    let tailStart = tailBytesRead > tailBytes ? tailBytesRead - tailBytes : 0;
+    while (tailStart < tailBytesRead && ((tailBuffer[tailStart] ?? 0) & 0xc0) === 0x80) {
+      tailStart += 1;
+    }
+    const absoluteTailStart = tailPosition + tailStart;
+    const tailStartsMidLine =
+      absoluteTailStart > 0 &&
+      tailBuffer[tailStart] !== 0x0a &&
+      tailBuffer[tailStart - 1] !== 0x0a;
+
+    return {
+      head,
+      tail: tailBuffer.subarray(tailStart, tailBytesRead).toString("utf8"),
+      tailStartsMidLine,
+    };
   } finally {
     await file.close();
   }
@@ -58,7 +84,7 @@ export default function bashOutputLimit(pi: ExtensionAPI) {
       details: event.details as BashToolDetails | undefined,
       maxKiB,
       saveFullOutput,
-      readFullOutputHead,
+      readFullOutputWindows,
     });
     if (!patch) return;
     return patch;
