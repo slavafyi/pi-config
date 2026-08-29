@@ -129,8 +129,7 @@ export async function limitBashOutput(
   const retainedHeadBytes = Buffer.byteLength(windows.head, "utf8");
   const retainedTailBytes = Buffer.byteLength(windows.tail, "utf8");
   const retainedBytes = retainedHeadBytes + retainedTailBytes;
-  const omittedBytes = Math.max(0, totalBytes - retainedBytes);
-  const marker = `[... output truncated: ${formatSize(omittedBytes)} omitted ...]`;
+  const marker = "[... middle omitted ...]";
   const truncatedContent = joinWindows(windows.head, marker, windows.tail);
   const totalLines = existingTruncation?.totalLines ?? countLines(body);
   const truncation = {

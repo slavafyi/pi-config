@@ -71,7 +71,7 @@ test("keeps UTF-8-safe head and tail windows and saves complete output", async (
   assert.equal(savedOutput, original);
   const output = outputText(result.content);
   assert.ok(output.startsWith("HEADER 🙂"));
-  assert.ok(output.includes("[... output truncated:"));
+  assert.ok(output.includes("[... middle omitted ...]"));
   assert.equal(output.includes("�"), false);
   assert.ok(output.includes("Command exited with code 1"));
   assert.ok(output.includes("showing first 2.0KB and last 8.0KB"));
@@ -133,7 +133,7 @@ test("reuses Pi full output path and source totals", async () => {
   assert.equal(result.details.truncation?.lastLinePartial, true);
   const output = outputText(result.content);
   assert.ok(output.startsWith("line 1 "));
-  assert.ok(output.includes("[... output truncated:"));
+  assert.ok(output.includes("[... middle omitted ...]"));
   assert.ok(output.includes("line 5000 "));
   assert.equal(output.match(/Full output:/g)?.length, 1);
   assert.ok(output.endsWith(`Full output: ${piPath}]`));
@@ -179,7 +179,7 @@ test("uses Pi source totals when its visible tail is below the configured limit"
   assert.equal(result.details.truncation?.totalBytes, totalBytes);
   const output = outputText(result.content);
   assert.ok(output.startsWith("HEADER\n"));
-  assert.ok(output.includes("[... output truncated:"));
+  assert.ok(output.includes("[... middle omitted ...]"));
   assert.ok(output.endsWith(`Full output: ${piPath}]`));
 });
 
