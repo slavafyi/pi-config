@@ -20,10 +20,6 @@ Calling `Agent` is the model's self-attestation that all gates passed. These are
 semantic policy checks, not a security boundary; the extension cannot prove
 that a task is useful or non-overlapping.
 
-Legacy `WITH AGENTS ENABLED FOR THIS PARENT RUN` session messages are historical
-and no longer control access. The former `/with-agents` command is not
-registered.
-
 ## Foreground and background
 
 Tintinweb is configured with `backgroundByDefault: false`.

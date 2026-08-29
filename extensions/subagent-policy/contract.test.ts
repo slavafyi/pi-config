@@ -28,7 +28,6 @@ assert.match(
   /Any change after a reviewer examines an artifact invalidates that verdict/,
 );
 assert.match(SUBAGENT_POLICY_PROMPT, /Parallel writers must use separate git worktrees/);
-assert.match(SUBAGENT_POLICY_PROMPT, /Legacy extension-generated/);
 assert.doesNotMatch(SUBAGENT_POLICY_PROMPT, /Prefer background agents for parallel fan-out/);
 
 const handlers = new Map<string, (event: any, ctx: any) => any>();

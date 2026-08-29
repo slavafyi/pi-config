@@ -27,11 +27,7 @@ Use background agents only for long-running or genuinely independent work whose 
 
 Any change after a reviewer examines an artifact invalidates that verdict. Re-review the final artifact or perform equivalent parent verification before finalizing.
 
-Choose model, thinking, context inheritance, and isolation per call. Parallel writers must use separate git worktrees. Worktree isolation is optional for read-only agents and a sole writer. Scheduling and nested delegation are disabled. The backend queues at most four background agents concurrently and uses smart join.
-
-Agent resume works only for an agent ID still held by the current pi-subagents manager. Use get_subagent_result and steer_subagent only for known agents. Persisted session files are not automatically rediscovered after manager cleanup or a Pi restart.
-
-Legacy extension-generated "WITH AGENTS ENABLED FOR THIS PARENT RUN" messages are historical and neither grant nor restrict access. The parent owns integration and must verify agent-produced changes before reporting completion.
+Parallel writers must use separate git worktrees. Worktree isolation is optional for read-only agents and a sole writer.
 --- END SUBAGENT POLICY ---`;
 
 export function formatContextUsage(usage: ContextUsage | undefined): string | undefined {
