@@ -32,6 +32,7 @@ pnpx skills add microsoft/playwright-cli \
   --agent universal \
   --skill playwright-cli \
   --yes
+
 pnpx skills add parallel-web/parallel-agent-skills \
   --global \
   --agent universal \
