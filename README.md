@@ -72,8 +72,9 @@ pi update --extensions
 | `oracle` | Read-only second opinion on direction and assumptions |
 | `reviewer` | Read-only review of a finished artifact |
 
-Subagents run with a maximum concurrency of four and a maximum nesting depth
-of one. Pi's default agents are disabled in favor of these definitions.
+Subagents use foreground execution by default. Explicit background work runs
+with a maximum concurrency of four and smart join. The maximum nesting depth is
+one, and Pi's default agents are disabled in favor of these definitions.
 
 ## Extensions
 
@@ -83,7 +84,7 @@ of one. Pi's default agents are disabled in favor of these definitions.
 | `footer` | Responsive project, model, extension-status, quota, cache, context, and cost footer |
 | `plan-mode` | Read-only planning with cache-preserving execution transitions |
 | `usage` | Codex and Cursor quota status and Cursor cost estimates |
-| `with-agents` | `/with-agents` policy gate for subagent orchestration |
+| `subagent-policy` | Automatic delegation policy with foreground execution by default |
 
 Extension-specific settings are namespaced under `extensions` in
 `user-settings.json`. An extension remains inactive when its required section

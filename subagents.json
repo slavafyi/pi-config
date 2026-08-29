@@ -1,6 +1,7 @@
 {
   "maxConcurrent": 4,
   "defaultJoinMode": "smart",
+  "backgroundByDefault": false,
   "schedulingEnabled": false,
   "maxSubagentDepth": 1,
   "disableDefaultAgents": true,
