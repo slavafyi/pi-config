@@ -3,7 +3,6 @@ import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import {
   DEFAULT_MAX_LINES,
   formatSize,
-  truncateTail,
   type BashToolDetails,
 } from "@earendil-works/pi-coding-agent";
 
@@ -15,12 +14,22 @@ export interface BashOutputLimitConfig {
 
 type ContentBlock = TextContent | ImageContent;
 
+export interface BashOutputWindows {
+  head: string;
+  tail: string;
+  tailStartsMidLine: boolean;
+}
+
 export interface BashOutputLimitInput {
   content: ContentBlock[];
   details?: BashToolDetails;
   maxKiB: number;
   saveFullOutput: (output: string) => Promise<string>;
-  readFullOutputHead?: (path: string, maxBytes: number) => Promise<string>;
+  readFullOutputWindows?: (
+    path: string,
+    headBytes: number,
+    tailBytes: number,
+  ) => Promise<BashOutputWindows>;
 }
 
 export interface BashOutputLimitPatch {
@@ -54,6 +63,19 @@ function takeHeadUtf8(text: string, maxBytes: number): string {
   return new StringDecoder("utf8").write(bytes.subarray(0, maxBytes));
 }
 
+function takeTailUtf8(text: string, maxBytes: number): { text: string; startsMidLine: boolean } {
+  const bytes = Buffer.from(text, "utf8");
+  if (bytes.length <= maxBytes) return { text, startsMidLine: false };
+
+  let start = bytes.length - maxBytes;
+  while (start < bytes.length && ((bytes[start] ?? 0) & 0xc0) === 0x80) start += 1;
+  return {
+    text: bytes.subarray(start).toString("utf8"),
+    startsMidLine:
+      start > 0 && bytes[start] !== 0x0a && bytes[start - 1] !== 0x0a,
+  };
+}
+
 function countLines(text: string): number {
   if (!text) return 0;
   const lines = text.split("\n").length;
@@ -76,51 +98,55 @@ export async function limitBashOutput(
   const text = textBlock.text;
 
   const existingPath = input.details?.fullOutputPath;
+  const existingTruncation = input.details?.truncation;
   const body = stripExistingNotice(text, existingPath);
+  const bodyBytes = Buffer.byteLength(body, "utf8");
+  const totalBytes = existingTruncation?.totalBytes ?? bodyBytes;
   const maxBytes = input.maxKiB * 1024;
-  if (Buffer.byteLength(body, "utf8") <= maxBytes) return undefined;
+  if (totalBytes <= maxBytes) return undefined;
 
   const headBytes = Math.floor(maxBytes / 5);
   const tailBytes = maxBytes - headBytes;
   let fullOutputPath = existingPath;
-  let head: string;
+  let windows: BashOutputWindows;
   try {
     if (fullOutputPath) {
-      if (!input.readFullOutputHead) return undefined;
-      head = await input.readFullOutputHead(fullOutputPath, headBytes);
+      if (!input.readFullOutputWindows) return undefined;
+      windows = await input.readFullOutputWindows(fullOutputPath, headBytes, tailBytes);
     } else {
       fullOutputPath = await input.saveFullOutput(text);
-      head = takeHeadUtf8(body, headBytes);
+      const tail = takeTailUtf8(body, tailBytes);
+      windows = {
+        head: takeHeadUtf8(body, headBytes),
+        tail: tail.text,
+        tailStartsMidLine: tail.startsMidLine,
+      };
     }
   } catch {
     return undefined;
   }
 
-  const tail = truncateTail(body, {
-    maxBytes: tailBytes,
-    maxLines: DEFAULT_MAX_LINES,
-  });
-  const existingTruncation = input.details?.truncation;
-  const totalLines = existingTruncation?.totalLines ?? tail.totalLines;
-  const totalBytes = existingTruncation?.totalBytes ?? tail.totalBytes;
-  const retainedBytes = Buffer.byteLength(head, "utf8") + tail.outputBytes;
+  const retainedHeadBytes = Buffer.byteLength(windows.head, "utf8");
+  const retainedTailBytes = Buffer.byteLength(windows.tail, "utf8");
+  const retainedBytes = retainedHeadBytes + retainedTailBytes;
   const omittedBytes = Math.max(0, totalBytes - retainedBytes);
   const marker = `[... output truncated: ${formatSize(omittedBytes)} omitted ...]`;
-  const truncatedContent = joinWindows(head, marker, tail.content);
+  const truncatedContent = joinWindows(windows.head, marker, windows.tail);
+  const totalLines = existingTruncation?.totalLines ?? countLines(body);
   const truncation = {
     content: truncatedContent,
     truncated: true,
     truncatedBy: "bytes" as const,
     totalLines,
     totalBytes,
-    outputLines: countLines(head) + tail.outputLines + 1,
+    outputLines: countLines(windows.head) + countLines(windows.tail) + 1,
     outputBytes: retainedBytes,
-    lastLinePartial: tail.lastLinePartial,
+    lastLinePartial: windows.tailStartsMidLine,
     firstLineExceedsLimit: false,
     maxLines: DEFAULT_MAX_LINES,
     maxBytes,
   };
-  const notice = `[Output truncated: showing first ${formatSize(headBytes)} and last ${formatSize(tailBytes)} of ${formatSize(totalBytes)}. Full output: ${fullOutputPath}]`;
+  const notice = `[Output truncated: showing first ${formatSize(retainedHeadBytes)} and last ${formatSize(retainedTailBytes)} of ${formatSize(totalBytes)}. Full output: ${fullOutputPath}]`;
   const content = input.content.map((block) =>
     block === textBlock
       ? { ...block, text: `${truncatedContent}\n\n${notice}` }
