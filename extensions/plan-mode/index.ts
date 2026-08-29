@@ -30,8 +30,22 @@ interface PlanModeState {
 	enabled: boolean;
 	todos?: TodoItem[];
 	executing?: boolean;
-	toolsBeforePlanMode?: string[]; // Legacy state from the upstream tool-switching implementation.
 }
+
+type PlanStateKind = "normal" | "planning" | "executing";
+
+interface PlanStateMessage {
+	kind: PlanStateKind;
+	customType: "plan-normal-context" | "plan-mode-context" | "plan-execution-context";
+	content: string;
+}
+
+const PLAN_STATE_TYPES = new Map<string, PlanStateKind>([
+	["plan-normal-context", "normal"],
+	["plan-mode-context", "planning"],
+	["plan-mode-execute", "executing"],
+	["plan-execution-context", "executing"],
+]);
 
 // Type guard for assistant messages
 function isAssistantMessage(m: AgentMessage): m is AssistantMessage {
@@ -154,35 +168,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		handler: async (ctx) => togglePlanMode(ctx),
 	});
 
-	// Keep tool definitions stable for provider prompt caching and enforce plan mode at runtime.
-	pi.on("tool_call", async (event) => {
-		if (!planModeEnabled) return;
-
-		if (PLAN_MODE_MUTATING_TOOLS.has(event.toolName)) {
-			return {
-				block: true,
-				reason: `Plan mode: ${event.toolName} is blocked. Use /plan to disable plan mode first.`,
-			};
-		}
-		if (event.toolName === "bash") {
-			const command = event.input.command as string;
-			if (!isSafeCommand(command)) {
-				return {
-					block: true,
-					reason: `Plan mode: command blocked (not allowlisted). Use /plan to disable plan mode first.\nCommand: ${command}`,
-				};
-			}
-		}
-	});
-
-	// State messages are append-only so changing modes preserves the cached prompt prefix.
-	pi.on("before_agent_start", async (event) => {
-		let customType = "plan-normal-context";
-		let content = "[NORMAL MODE ACTIVE]\nFull tool access is enabled.";
-
+	function buildPlanState(): PlanStateMessage {
 		if (planModeEnabled) {
-			customType = "plan-mode-context";
-			content = `[PLAN MODE ACTIVE]
+			return {
+				kind: "planning",
+				customType: "plan-mode-context",
+				content: `[PLAN MODE ACTIVE]
 You are in plan mode - a read-only exploration mode for safe code analysis.
 
 Restrictions:
@@ -199,23 +190,99 @@ Plan:
 2. Second step description
 ...
 
-Do NOT attempt to make changes - just describe what you would do.`;
-		} else if (executionMode && todoItems.length > 0) {
+Do NOT attempt to make changes - just describe what you would do.`,
+			};
+		}
+
+		if (executionMode && todoItems.length > 0) {
 			const remaining = todoItems.filter((t) => !t.completed);
 			const todoList = remaining.map((t) => `${t.step}. ${t.text}`).join("\n");
-			customType = "plan-execution-context";
-			content = `[EXECUTING PLAN - Full tool access enabled]
+			return {
+				kind: "executing",
+				customType: "plan-execution-context",
+				content: `[EXECUTING PLAN]
+Plan-mode restrictions are inactive.
 
 Remaining steps:
 ${todoList}
 
-Execute each step in order.
-After completing a step, include a [DONE:n] tag in your response.`;
+Complete one step at a time.
+Immediately after completing step n, include [DONE:n] before starting the next step.`,
+			};
 		}
 
 		return {
-			systemPrompt: `${event.systemPrompt}\n\n${MODE_GUARD_PROMPT}`,
-			message: { customType, content, display: false },
+			kind: "normal",
+			customType: "plan-normal-context",
+			content: "[NORMAL MODE ACTIVE]\nPlan-mode restrictions are inactive.",
+		};
+	}
+
+	function getLatestPlanState(ctx: ExtensionContext): { kind: PlanStateKind; content: string } | undefined {
+		const entries = ctx.sessionManager.buildContextEntries();
+		for (let index = entries.length - 1; index >= 0; index--) {
+			const entry = entries[index];
+			if (entry?.type === "custom_message") {
+				const kind = PLAN_STATE_TYPES.get(entry.customType);
+				if (kind && typeof entry.content === "string") return { kind, content: entry.content };
+			}
+			if (entry?.type !== "compaction") continue;
+			const retainedTail = (entry as { retainedTail?: AgentMessage[] }).retainedTail;
+			if (!retainedTail) continue;
+			for (let tailIndex = retainedTail.length - 1; tailIndex >= 0; tailIndex--) {
+				const message = retainedTail[tailIndex];
+				if (message?.role !== "custom") continue;
+				const kind = PLAN_STATE_TYPES.get(message.customType);
+				if (kind && typeof message.content === "string") return { kind, content: message.content };
+			}
+		}
+		return undefined;
+	}
+
+	function hasHistoricalPlanState(ctx: ExtensionContext): boolean {
+		return ctx.sessionManager.getBranch().some((entry) => {
+			if (entry.type !== "custom_message") return false;
+			return PLAN_STATE_TYPES.has(entry.customType);
+		});
+	}
+
+	// Keep tool definitions stable for provider prompt caching and enforce plan mode at runtime.
+	pi.on("tool_call", async (event) => {
+		if (!planModeEnabled) return;
+
+		if (PLAN_MODE_MUTATING_TOOLS.has(event.toolName)) {
+			return {
+				block: true,
+				reason: `Plan mode: ${event.toolName} is blocked. Continue with read-only analysis.`,
+			};
+		}
+		if (event.toolName === "bash") {
+			const command = event.input.command as string;
+			if (!isSafeCommand(command)) {
+				return {
+					block: true,
+					reason: `Plan mode: command blocked (not allowlisted). Continue with read-only alternatives, or ask the user to exit plan mode if changes are required.\nCommand: ${command}`,
+				};
+			}
+		}
+	});
+
+	// Append only state transitions so earlier provider prompt prefixes remain cacheable.
+	pi.on("before_agent_start", async (event, ctx) => {
+		const state = buildPlanState();
+		const latest = getLatestPlanState(ctx);
+		const systemPrompt = `${event.systemPrompt}\n\n${MODE_GUARD_PROMPT}`;
+
+		if (
+			(!latest && state.kind === "normal" && !hasHistoricalPlanState(ctx)) ||
+			(latest?.kind === state.kind && latest.content === state.content)
+		) {
+			return { systemPrompt };
+		}
+
+		return {
+			systemPrompt,
+			message: { customType: state.customType, content: state.content, display: false },
 		};
 	});
 
@@ -278,25 +345,14 @@ After completing a step, include a [DONE:n] tag in your response.`;
 		]);
 
 		if (choice?.startsWith("Execute")) {
-			const firstTodoItem = todoItems[0];
-			if (!firstTodoItem) return;
-
 			planModeEnabled = false;
 			executionMode = true;
 			updateStatus(ctx);
 			persistState();
 
-			const remainingList = todoItems.map((t) => `${t.step}. ${t.text}`).join("\n");
-			const execMessage = `[EXECUTING PLAN - Full tool access enabled]
-Plan mode has ended. Execute the plan now.
-
-Remaining steps:
-${remainingList}
-
-Start with: ${firstTodoItem.text}
-After completing a step, include a [DONE:n] tag in your response.`;
+			const executionState = buildPlanState();
 			pi.sendMessage(
-				{ customType: "plan-mode-execute", content: execMessage, display: true },
+				{ customType: "plan-mode-execute", content: executionState.content, display: true },
 				{ triggerTurn: true, deliverAs: "followUp" },
 			);
 		} else if (choice === "Refine the plan") {
@@ -331,9 +387,6 @@ After completing a step, include a [DONE:n] tag in your response.`;
 			planModeEnabled = planModeEntry.data.enabled ?? planModeEnabled;
 			todoItems = planModeEntry.data.todos ?? todoItems;
 			executionMode = planModeEntry.data.executing ?? executionMode;
-			if (planModeEntry.data.toolsBeforePlanMode) {
-				pi.setActiveTools(planModeEntry.data.toolsBeforePlanMode);
-			}
 		}
 
 		// On resume: re-scan messages to rebuild completion state

@@ -3,17 +3,18 @@ import test from "node:test";
 
 import planMode, { MODE_GUARD_PROMPT } from "./index.ts";
 
-test("changes modes without changing the provider tool prefix", async () => {
+function createHarness(initialEntries: any[] = []) {
 	const handlers = new Map<string, (event: any, ctx: any) => any>();
 	const eventHandlers = new Map<string, (data: unknown) => void>();
 	const commands = new Map<string, (args: string, ctx: any) => Promise<void>>();
 	const setActiveToolsCalls: string[][] = [];
 	const sentMessages: Array<{ message: any; options: any }> = [];
-	const entries: any[] = [];
+	const entries = [...initialEntries];
 	const statuses: Array<string | undefined> = [];
 	const widgets: Array<string[] | undefined> = [];
 	let themeName = "light";
 	let unsubscribed = false;
+
 	const pi = {
 		on: (event: string, handler: (event: any, ctx: any) => any) => handlers.set(event, handler),
 		events: {
@@ -34,12 +35,19 @@ test("changes modes without changing the provider tool prefix", async () => {
 		registerShortcut: () => {},
 		appendEntry: (customType: string, data: unknown) => entries.push({ type: "custom", customType, data }),
 		setActiveTools: (tools: string[]) => setActiveToolsCalls.push(tools),
-		sendMessage: (message: any, options: any) => sentMessages.push({ message, options }),
+		sendMessage: (message: any, options: any) => {
+			sentMessages.push({ message, options });
+			entries.push({ type: "custom_message", ...message });
+		},
 		sendUserMessage: () => {},
 	};
 	const ctx = {
 		hasUI: true,
-		sessionManager: { getEntries: () => entries },
+		sessionManager: {
+			getEntries: () => entries,
+			getBranch: () => entries,
+			buildContextEntries: () => entries,
+		},
 		ui: {
 			notify: () => {},
 			setStatus: (_id: string, value: string | undefined) => statuses.push(value),
@@ -54,35 +62,74 @@ test("changes modes without changing the provider tool prefix", async () => {
 	};
 
 	planMode(pi as any);
+
+	async function startAgent() {
+		const result = await handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
+		if (result?.message) entries.push({ type: "custom_message", ...result.message });
+		return result;
+	}
+
+	return {
+		commands,
+		ctx,
+		entries,
+		eventHandlers,
+		handlers,
+		sentMessages,
+		setActiveToolsCalls,
+		startAgent,
+		statuses,
+		widgets,
+		setThemeName: (name: string) => {
+			themeName = name;
+		},
+		wasUnsubscribed: () => unsubscribed,
+	};
+}
+
+test("publishes only plan state transitions while preserving progress UI", async () => {
+	const harness = createHarness();
+	const {
+		commands,
+		ctx,
+		eventHandlers,
+		handlers,
+		sentMessages,
+		setActiveToolsCalls,
+		startAgent,
+		statuses,
+		widgets,
+	} = harness;
 	await handlers.get("session_start")?.({}, ctx);
 
-	const normal = await handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
+	const normal = await startAgent();
 	assert.equal(normal.systemPrompt, `base\n\n${MODE_GUARD_PROMPT}`);
-	assert.equal(normal.message.customType, "plan-normal-context");
+	assert.equal(normal.message, undefined);
 
 	await commands.get("plan")?.("", ctx);
 	assert.equal(statuses.at(-1), "light:warning:⏸︎ plan");
-	themeName = "dark";
+	harness.setThemeName("dark");
 	const statusesBeforeInvalidate = statuses.length;
 	eventHandlers.get("footer:invalidate")?.(undefined);
 	assert.equal(statuses.at(-1), "dark:warning:⏸︎ plan");
 	eventHandlers.get("footer:invalidate")?.(undefined);
 	assert.equal(statuses.length, statusesBeforeInvalidate + 1);
 
-	const planning = await handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
+	const planning = await startAgent();
 	assert.equal(planning.systemPrompt, normal.systemPrompt);
 	assert.equal(planning.message.customType, "plan-mode-context");
+	assert.equal((await startAgent()).message, undefined);
 	assert.deepEqual(await handlers.get("tool_call")?.({ toolName: "edit", input: {} }, ctx), {
 		block: true,
-		reason: "Plan mode: edit is blocked. Use /plan to disable plan mode first.",
+		reason: "Plan mode: edit is blocked. Continue with read-only analysis.",
 	});
 	assert.equal(
 		await handlers.get("tool_call")?.({ toolName: "bash", input: { command: "git status" } }, ctx),
 		undefined,
 	);
-	assert.equal(
-		(await handlers.get("tool_call")?.({ toolName: "bash", input: { command: "rm file" } }, ctx)).block,
-		true,
+	assert.match(
+		(await handlers.get("tool_call")?.({ toolName: "bash", input: { command: "rm file" } }, ctx)).reason,
+		/ask the user to exit plan mode/,
 	);
 
 	await handlers.get("agent_end")?.(
@@ -96,25 +143,80 @@ test("changes modes without changing the provider tool prefix", async () => {
 		},
 		ctx,
 	);
-	const execution = await handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-	assert.equal(execution.systemPrompt, normal.systemPrompt);
-	assert.equal(execution.message.customType, "plan-execution-context");
-	assert.match(execution.message.content, /Inspect the cache behavior/);
 	assert.equal(sentMessages.length, 1);
 	assert.equal(sentMessages[0].message.customType, "plan-mode-execute");
-	assert.match(sentMessages[0].message.content, /Plan mode has ended\. Execute the plan now\./);
+	assert.match(sentMessages[0].message.content, /^\[EXECUTING PLAN\]/);
+	assert.match(sentMessages[0].message.content, /Immediately after completing step n/);
+	assert.doesNotMatch(sentMessages[0].message.content, /Full tool access/);
 	assert.deepEqual(sentMessages[0].options, { triggerTurn: true, deliverAs: "followUp" });
+	assert.equal((await startAgent()).message, undefined);
 	assert.deepEqual(setActiveToolsCalls, []);
 	assert.equal(handlers.has("context"), false);
 	assert.equal(statuses.at(-1), "dark:accent:● 0/2");
 	assert.ok(widgets.at(-1)?.every((line) => line.includes("dark:muted:○ ")));
 
-	themeName = "light-again";
+	await handlers.get("turn_end")?.(
+		{
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "The first step is complete. [DONE:1]" }],
+			},
+		},
+		ctx,
+	);
+	assert.equal(statuses.at(-1), "dark:accent:● 1/2");
+	assert.match(widgets.at(-1)?.[0] ?? "", /dark:success:✓ .*~Inspect the cache behavior~/);
+	assert.match(widgets.at(-1)?.[1] ?? "", /dark:muted:○ .*Apply the focused fix/);
+
+	const updatedExecution = await startAgent();
+	assert.equal(updatedExecution.message.customType, "plan-execution-context");
+	assert.doesNotMatch(updatedExecution.message.content, /Inspect the cache behavior/);
+	assert.match(updatedExecution.message.content, /Apply the focused fix/);
+	assert.equal((await startAgent()).message, undefined);
+
+	harness.setThemeName("light-again");
 	eventHandlers.get("footer:invalidate")?.(undefined);
 	assert.ok(widgets.at(-1)?.some((line) => line.includes("light-again:muted:")));
 
 	handlers.get("session_shutdown")?.({}, ctx);
 	assert.equal(statuses.at(-1), undefined);
 	assert.equal(widgets.at(-1), undefined);
-	assert.equal(unsubscribed, true);
+	assert.equal(harness.wasUnsubscribed(), true);
+});
+
+test("restores execution progress without applying legacy tool state", async () => {
+	const entries = [
+		{
+			type: "custom_message",
+			customType: "plan-mode-execute",
+			content: "[EXECUTING PLAN]",
+		},
+		{
+			type: "custom",
+			customType: "plan-mode",
+			data: {
+				enabled: false,
+				executing: true,
+				toolsBeforePlanMode: ["read"],
+				todos: [
+					{ step: 1, text: "Inspect state", completed: false },
+					{ step: 2, text: "Apply fix", completed: false },
+				],
+			},
+		},
+		{
+			type: "message",
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "Inspection complete. [DONE:1]" }],
+			},
+		},
+	];
+	const harness = createHarness(entries);
+	await harness.handlers.get("session_start")?.({}, harness.ctx);
+
+	assert.deepEqual(harness.setActiveToolsCalls, []);
+	assert.equal(harness.statuses.at(-1), "light:accent:● 1/2");
+	assert.match(harness.widgets.at(-1)?.[0] ?? "", /light:success:✓ .*~Inspect state~/);
+	assert.match(harness.widgets.at(-1)?.[1] ?? "", /light:muted:○ .*Apply fix/);
 });
