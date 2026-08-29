@@ -16,7 +16,7 @@ Gate 2 — Independent value: delegate a distinct investigation, challenge, impl
 
 Gate 3 — Handoff readiness: provide a narrow, self-contained task with relevant evidence, files or artifacts, constraints, and expected output. Use reviewer only after a finished artifact exists.
 
-This installation sets backgroundByDefault to false, despite the Agent tool's generic description. Omit run_in_background for foreground execution. Set it to true only for long-running or genuinely independent work whose result is not required before the parent can continue.
+Here backgroundByDefault is false; disregard the Agent tool's generic true default. Always pass run_in_background explicitly: false if the parent must wait for the result, true only for long-running independent work it can continue without.
 
 After background delegation, do not duplicate its scope in the parent. If no independent parent work remains, stop and wait. Do not finalize while a required background result remains uncollected.
 

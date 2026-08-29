@@ -13,10 +13,11 @@ assert.equal(
 );
 
 assert.match(SUBAGENT_POLICY_PROMPT, /Calling Agent certifies that all three gates passed/);
-assert.match(SUBAGENT_POLICY_PROMPT, /backgroundByDefault to false/);
+assert.match(SUBAGENT_POLICY_PROMPT, /backgroundByDefault is false/);
+assert.match(SUBAGENT_POLICY_PROMPT, /Always pass run_in_background explicitly/);
 assert.match(
   SUBAGENT_POLICY_PROMPT,
-  /Set it to true only for long-running or genuinely independent work/,
+  /false if the parent must wait for the result, true only for long-running independent work/,
 );
 assert.match(SUBAGENT_POLICY_PROMPT, /do not duplicate its scope in the parent/);
 assert.match(

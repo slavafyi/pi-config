@@ -29,9 +29,10 @@ Tintinweb is configured with `backgroundByDefault: false`. Its generic Agent
 tool description currently says that background execution is the default, so
 the policy explicitly corrects that mismatch for this installation.
 
-Omitting `run_in_background` runs the agent in the foreground. Set it to `true`
-only for long-running or genuinely independent work. The parent must not
-duplicate the delegated scope, invent work merely to stay busy, or finalize
+The policy requires every `Agent` call to set `run_in_background` explicitly:
+use `false` when the parent must wait for the result, and `true` only for
+long-running independent work the parent can continue without. The parent must
+not duplicate the delegated scope, invent work merely to stay busy, or finalize
 while a required result is uncollected. Smart join consolidates sibling
 completion notifications.
 
