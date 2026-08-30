@@ -58,6 +58,19 @@ instructions in context.
 - Widget shows progress
 - Completed plans render as TUI-only session entries
 
+Streaming progress is scanned incrementally with a short per-text-block tail so
+markers split across provider chunks are recognized without rescanning the full
+response. Final messages and completed turns provide fallback detection.
+Progress is persisted after tool results at `turn_end`.
+
+The hidden normal-state transition is queued at the final `turn_end`, where Pi
+flushes triggerless custom messages before any continuation queued by
+`agent_end`. If that final event was not observed, `agent_end` queues the same
+transition as a recovery path. The visible completion entry and cleared
+execution state are then recorded at `agent_end`. On resume, state is restored
+only from the active session branch, and completion markers are rescanned only
+after that branch's latest execution marker.
+
 ### Command Allowlist
 
 Safe commands (allowed):

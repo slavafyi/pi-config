@@ -39,7 +39,8 @@ The extension reads the last successful snapshot from `usage-cache.json` in
 account and verifies a one-way account fingerprint stored with the snapshot.
 The cache contains normalized quota data and account fingerprints only, is
 written with mode `0600`, and never contains account IDs, access tokens, or
-refresh tokens.
+refresh tokens. Cache entries are parsed independently, so one malformed
+provider entry does not discard valid entries for other providers.
 
 OpenAI Codex calls ChatGPT's `/backend-api/wham/usage` endpoint directly. It
 identifies the five-hour and weekly windows by their reported duration rather
@@ -105,9 +106,11 @@ the recorded prompt exceeds its documented threshold. No Max Mode uplift or
 team surcharge is inferred without a message-level signal.
 
 Rates live in `core.ts` under `STANDARD_RATES`, `FAST_RATES`, and
-`LONG_CONTEXT_RATES`. Update them from Cursor's official model pricing pages;
-older fallback rates come from the MIT-licensed oh-my-pi catalog. Unknown models
-remain at zero rather than receiving a guessed charge.
+`LONG_CONTEXT_RATES`. Values are USD per million tokens. Update them from
+Cursor's official model pricing pages; older fallback rates come from the
+MIT-licensed oh-my-pi catalog. The configured GPT-5.6 Sol standard rate is
+Cursor's promotional price through November 21, 2026. Unknown models remain at
+zero rather than receiving a guessed charge.
 
 ## Troubleshooting
 

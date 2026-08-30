@@ -1,17 +1,3 @@
-/**
- * Plan Mode Extension
- *
- * Read-only exploration mode for safe code analysis.
- * When enabled, built-in write tools are blocked at runtime.
- *
- * Features:
- * - /plan command or Ctrl+Alt+P to toggle
- * - Bash restricted to allowlisted read-only commands
- * - Extracts numbered plan steps from "Plan:" sections
- * - [DONE:n] markers to complete steps during execution
- * - Progress tracking widget during execution
- */
-
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -21,8 +7,6 @@ import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } fr
 
 const PLAN_MODE_MUTATING_TOOLS = new Set(["edit", "write"]);
 
-// State messages remain in context to preserve the provider's cached prefix across mode changes.
-// The guard resolves the otherwise contradictory historical mode instructions.
 export const MODE_GUARD_PROMPT =
 	"The latest extension-generated plan-mode state message controls the current mode. Treat older plan-mode state messages as historical context.";
 
@@ -51,12 +35,10 @@ const PLAN_STATE_TYPES = new Map<string, PlanStateKind>([
 	["plan-execution-context", "executing"],
 ]);
 
-// Type guard for assistant messages
 function isAssistantMessage(m: AgentMessage): m is AssistantMessage {
 	return m.role === "assistant" && Array.isArray(m.content);
 }
 
-// Extract text content from an assistant message
 function getTextContent(message: AssistantMessage): string {
 	return message.content
 		.filter((block): block is TextContent => block.type === "text")
@@ -266,7 +248,6 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		});
 	}
 
-	// Keep tool definitions stable for provider prompt caching and enforce plan mode at runtime.
 	pi.on("tool_call", async (event) => {
 		if (!planModeEnabled) return;
 
@@ -287,7 +268,6 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		}
 	});
 
-	// Append only state transitions so earlier provider prompt prefixes remain cacheable.
 	pi.on("before_agent_start", async (event, ctx) => {
 		const state = buildPlanState();
 		const latest = getLatestPlanState(ctx);
@@ -325,7 +305,6 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		if (isAssistantMessage(event.message)) streamingDoneCarry.clear();
 	});
 
-	// Scan only new text, carrying enough trailing data to recognize split markers.
 	pi.on("message_update", async (event, ctx) => {
 		const update = event.assistantMessageEvent;
 		if (update.type !== "text_delta") return;
@@ -335,23 +314,18 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		streamingDoneCarry.set(update.contentIndex, candidate.slice(-32));
 	});
 
-	// Keep finalized messages as a fallback for providers without streaming updates.
 	pi.on("message_end", async (event, ctx) => {
 		applyCompletedSteps(event.message, ctx);
 		if (isAssistantMessage(event.message)) streamingDoneCarry.clear();
 	});
 
-	// Persist progress and publish completion context after the turn's tool results.
 	pi.on("turn_end", async (event, ctx) => {
 		if (!executionMode || todoItems.length === 0) return;
 		if (!isAssistantMessage(event.message)) return;
 
-		// Keep turn_end as a fallback for runtimes or tests that do not emit message_end.
 		applyCompletedSteps(event.message, ctx);
 		persistState();
 
-		// Pi flushes triggerless custom messages immediately after turn_end. Queue the
-		// normal transition here so any continuation queued from agent_end sees it.
 		if (!completionTransitionQueued && todoItems.every((item) => item.completed)) {
 			completionTransitionQueued = true;
 			const normalState = buildNormalState();
@@ -362,9 +336,7 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		}
 	});
 
-	// Handle plan completion and plan mode UI
 	pi.on("agent_end", async (event, ctx) => {
-		// Check if execution is complete
 		if (executionMode && todoItems.length > 0) {
 			if (todoItems.every((t) => t.completed)) {
 				pi.appendEntry<PlanCompleteData>("plan-complete", {
@@ -373,9 +345,8 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 				executionMode = false;
 				todoItems = [];
 				updateStatus(ctx);
-				persistState(); // Save cleared state so resume doesn't restore old execution mode
+				persistState();
 
-				// Recovery fallback for sessions completed without observing the final turn_end.
 				if (!completionTransitionQueued) {
 					const normalState = buildNormalState();
 					pi.sendMessage(
@@ -390,7 +361,6 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 
 		if (!planModeEnabled || !ctx.hasUI) return;
 
-		// Extract todos from last assistant message
 		const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
 		if (lastAssistant) {
 			const extracted = extractTodoItems(getTextContent(lastAssistant));
@@ -402,7 +372,6 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		if (todoItems.length === 0) return;
 		persistState();
 
-		// Show plan steps and prompt for next action
 		const todoListText = todoItems.map((t, i) => `${i + 1}. ○ ${t.text}`).join("\n");
 		const planTodoListMessage = {
 			customType: "plan-todo-list",
@@ -437,7 +406,6 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		}
 	});
 
-	// Restore state on session start/resume
 	pi.on("session_start", async (_event, ctx) => {
 		activeCtx = ctx;
 		renderedStatus = undefined;
@@ -451,7 +419,6 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 
 		const entries = ctx.sessionManager.getBranch();
 
-		// Restore persisted state from the active branch only.
 		const planModeEntry = entries
 			.filter((e: { type: string; customType?: string }) => e.type === "custom" && e.customType === "plan-mode")
 			.pop() as { data?: PlanModeState } | undefined;
@@ -462,11 +429,8 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 			executionMode = planModeEntry.data.executing ?? executionMode;
 		}
 
-		// On resume: re-scan messages to rebuild completion state
-		// Only scan messages AFTER the last "plan-mode-execute" to avoid picking up [DONE:n] from previous plans
 		const isResume = planModeEntry !== undefined;
 		if (isResume && executionMode && todoItems.length > 0) {
-			// Find the index of the last plan-mode-execute entry (marks when current execution started)
 			let executeIndex = -1;
 			for (let i = entries.length - 1; i >= 0; i--) {
 				const entry = entries[i] as { type: string; customType?: string };
@@ -476,7 +440,6 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 				}
 			}
 
-			// Only scan messages after the execute marker
 			const messages: AssistantMessage[] = [];
 			for (let i = executeIndex + 1; i < entries.length; i++) {
 				const entry = entries[i];
