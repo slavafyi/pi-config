@@ -3,7 +3,7 @@ import test from "node:test";
 
 import planMode, { MODE_GUARD_PROMPT } from "./index.ts";
 
-function createHarness(initialEntries: any[] = []) {
+function createHarness(initialEntries: any[] = [], activeBranch?: any[]) {
 	const handlers = new Map<string, (event: any, ctx: any) => any>();
 	const eventHandlers = new Map<string, (data: unknown) => void>();
 	const entryRenderers = new Map<string, (entry: any, options: any, theme: any) => any>();
@@ -58,8 +58,8 @@ function createHarness(initialEntries: any[] = []) {
 		hasUI: true,
 		sessionManager: {
 			getEntries: () => entries,
-			getBranch: () => entries,
-			buildContextEntries: () => entries,
+			getBranch: () => activeBranch ?? entries,
+			buildContextEntries: () => activeBranch ?? entries,
 		},
 		ui: {
 			notify: () => {},
@@ -320,6 +320,29 @@ test("publishes only plan state transitions while preserving progress UI", async
 	assert.equal(statuses.at(-1), undefined);
 	assert.equal(widgets.at(-1), undefined);
 	assert.equal(harness.wasUnsubscribed(), true);
+});
+
+test("restores plan state only from the active branch", async () => {
+	const activeState = {
+		type: "custom",
+		customType: "plan-mode",
+		data: { enabled: true, executing: false, todos: [] },
+	};
+	const abandonedState = {
+		type: "custom",
+		customType: "plan-mode",
+		data: {
+			enabled: false,
+			executing: true,
+			todos: [{ step: 1, text: "Abandoned branch work", completed: false }],
+		},
+	};
+	const harness = createHarness([activeState, abandonedState], [activeState]);
+
+	await harness.handlers.get("session_start")?.({}, harness.ctx);
+
+	assert.equal(harness.statuses.at(-1), "light:warning:⏸︎ plan");
+	assert.equal(harness.widgets.at(-1), undefined);
 });
 
 test("restores execution progress without applying legacy tool state", async () => {

@@ -449,9 +449,9 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 			planModeEnabled = true;
 		}
 
-		const entries = ctx.sessionManager.getEntries();
+		const entries = ctx.sessionManager.getBranch();
 
-		// Restore persisted state
+		// Restore persisted state from the active branch only.
 		const planModeEntry = entries
 			.filter((e: { type: string; customType?: string }) => e.type === "custom" && e.customType === "plan-mode")
 			.pop() as { data?: PlanModeState } | undefined;
