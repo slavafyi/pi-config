@@ -82,6 +82,11 @@ function createHarness(initialEntries: any[] = []) {
 		return result;
 	}
 
+	async function updateMessage(event: any): Promise<void> {
+		agentRunActive = true;
+		await handlers.get("message_update")?.(event, ctx);
+	}
+
 	async function endMessage(event: any): Promise<void> {
 		agentRunActive = true;
 		await handlers.get("message_end")?.(event, ctx);
@@ -112,6 +117,7 @@ function createHarness(initialEntries: any[] = []) {
 		setActiveToolsCalls,
 		startAgent,
 		statuses,
+		updateMessage,
 		widgets,
 		setThemeName: (name: string) => {
 			themeName = name;
@@ -136,6 +142,7 @@ test("publishes only plan state transitions while preserving progress UI", async
 		setActiveToolsCalls,
 		startAgent,
 		statuses,
+		updateMessage,
 		widgets,
 	} = harness;
 	await handlers.get("session_start")?.({}, ctx);
@@ -202,6 +209,12 @@ test("publishes only plan state transitions while preserving progress UI", async
 	const persistedStatesBeforeMessageEnd = entries.filter(
 		(entry) => entry.type === "custom" && entry.customType === "plan-mode",
 	).length;
+	await updateMessage({
+		message: { role: "assistant", content: [{ type: "text", text: "The first step is complete. [DONE:" }] },
+	});
+	assert.equal(statuses.at(-1), "dark:accent:● 0/2");
+	await updateMessage({ message: firstDoneMessage });
+	assert.equal(statuses.at(-1), "dark:accent:● 1/2");
 	await endMessage({ message: firstDoneMessage });
 	assert.equal(statuses.at(-1), "dark:accent:● 1/2");
 	assert.match(widgets.at(-1)?.[0] ?? "", /dark:success:✓ .*~Inspect the cache behavior~/);

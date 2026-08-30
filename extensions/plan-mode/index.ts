@@ -315,7 +315,12 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		}
 	}
 
-	// Update progress as soon as the assistant message is final, before its tool calls run.
+	// Update progress in the same render cycle that first shows a complete [DONE:n] marker.
+	pi.on("message_update", async (event, ctx) => {
+		applyCompletedSteps(event.message, ctx);
+	});
+
+	// Keep finalized messages as a fallback for providers without streaming updates.
 	pi.on("message_end", async (event, ctx) => {
 		applyCompletedSteps(event.message, ctx);
 	});
