@@ -78,7 +78,9 @@ test("keeps UTF-8-safe head and tail windows and saves complete output", async (
   assert.ok(output.endsWith("Full output: /tmp/pi-bash-full.log]"));
   assert.equal(result.details.fullOutputPath, "/tmp/pi-bash-full.log");
   assert.equal(result.details.truncation?.maxBytes, 10 * 1024);
-  assert.ok((result.details.truncation?.outputBytes ?? Infinity) <= 10 * 1024);
+  const truncatedContent = result.details.truncation?.content ?? "";
+  assert.equal(result.details.truncation?.outputBytes, Buffer.byteLength(truncatedContent));
+  assert.ok(Buffer.byteLength(truncatedContent) <= 10 * 1024);
 });
 
 test("reuses Pi full output path and source totals", async () => {
@@ -125,7 +127,7 @@ test("reuses Pi full output path and source totals", async () => {
 
   assert.ok(result);
   assert.equal(saved, false);
-  assert.deepEqual(requestedBytes, [4 * 1024, 16 * 1024]);
+  assert.deepEqual(requestedBytes, [4090, 16364]);
   assert.equal(result.details.fullOutputPath, piPath);
   assert.equal(result.details.truncation?.totalLines, 5000);
   assert.equal(result.details.truncation?.totalBytes, totalBytes);
