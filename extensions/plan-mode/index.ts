@@ -323,6 +323,12 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 				todoItems = [];
 				updateStatus(ctx);
 				persistState(); // Save cleared state so resume doesn't restore old execution mode
+
+				const normalState = buildPlanState();
+				pi.sendMessage(
+					{ customType: normalState.customType, content: normalState.content, display: false },
+					{ triggerTurn: false },
+				);
 			}
 			return;
 		}

@@ -193,7 +193,21 @@ test("publishes only plan state transitions while preserving progress UI", async
 	await handlers.get("agent_end")?.({ messages: [] }, ctx);
 	assert.equal(statuses.at(-1), undefined);
 	assert.equal(widgets.at(-1), undefined);
-	assert.equal(sentMessages.length, 1);
+	assert.equal(sentMessages.length, 2);
+	assert.deepEqual(sentMessages[1], {
+		message: {
+			customType: "plan-normal-context",
+			content: "[NORMAL MODE ACTIVE]\nPlan-mode restrictions are inactive.",
+			display: false,
+		},
+		options: { triggerTurn: false },
+	});
+	const stateAvailableToQueuedTurn = [...entries]
+		.reverse()
+		.find((entry) => entry.type === "custom_message" && entry.customType === "plan-normal-context");
+	assert.ok(stateAvailableToQueuedTurn);
+	assert.equal((await startAgent()).message, undefined);
+	assert.equal(sentMessages.length, 2);
 
 	const completionEntry = entries.find((entry) => entry.type === "custom" && entry.customType === "plan-complete");
 	assert.deepEqual(completionEntry?.data, {
