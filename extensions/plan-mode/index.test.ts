@@ -13,8 +13,14 @@ function createHarness(initialEntries: any[] = []) {
 	const entries = [...initialEntries];
 	const statuses: Array<string | undefined> = [];
 	const widgets: Array<string[] | undefined> = [];
+	const pendingCustomMessages: any[] = [];
 	let themeName = "light";
 	let unsubscribed = false;
+	let agentRunActive = false;
+
+	function appendCustomMessage(message: any): void {
+		entries.push({ type: "custom_message", ...message });
+	}
 
 	const pi = {
 		on: (event: string, handler: (event: any, ctx: any) => any) => handlers.set(event, handler),
@@ -40,7 +46,11 @@ function createHarness(initialEntries: any[] = []) {
 		setActiveTools: (tools: string[]) => setActiveToolsCalls.push(tools),
 		sendMessage: (message: any, options: any) => {
 			sentMessages.push({ message, options });
-			entries.push({ type: "custom_message", ...message });
+			if (agentRunActive && options?.triggerTurn === false) {
+				pendingCustomMessages.push(message);
+			} else {
+				appendCustomMessage(message);
+			}
 		},
 		sendUserMessage: () => {},
 	};
@@ -68,8 +78,19 @@ function createHarness(initialEntries: any[] = []) {
 
 	async function startAgent() {
 		const result = await handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-		if (result?.message) entries.push({ type: "custom_message", ...result.message });
+		if (result?.message) appendCustomMessage(result.message);
 		return result;
+	}
+
+	async function endTurn(event: any): Promise<void> {
+		agentRunActive = true;
+		await handlers.get("turn_end")?.(event, ctx);
+		for (const message of pendingCustomMessages.splice(0)) appendCustomMessage(message);
+	}
+
+	async function endAgent(event: any): Promise<void> {
+		agentRunActive = true;
+		await handlers.get("agent_end")?.(event, ctx);
 	}
 
 	return {
@@ -79,6 +100,8 @@ function createHarness(initialEntries: any[] = []) {
 		entryRenderers,
 		eventHandlers,
 		handlers,
+		endAgent,
+		endTurn,
 		sentMessages,
 		setActiveToolsCalls,
 		startAgent,
@@ -100,6 +123,8 @@ test("publishes only plan state transitions while preserving progress UI", async
 		entryRenderers,
 		eventHandlers,
 		handlers,
+		endAgent,
+		endTurn,
 		sentMessages,
 		setActiveToolsCalls,
 		startAgent,
@@ -138,7 +163,7 @@ test("publishes only plan state transitions while preserving progress UI", async
 		/ask the user to exit plan mode/,
 	);
 
-	await handlers.get("agent_end")?.(
+	await endAgent(
 		{
 			messages: [
 				{
@@ -147,7 +172,6 @@ test("publishes only plan state transitions while preserving progress UI", async
 				},
 			],
 		},
-		ctx,
 	);
 	assert.equal(sentMessages.length, 1);
 	assert.equal(sentMessages[0].message.customType, "plan-mode-execute");
@@ -161,15 +185,12 @@ test("publishes only plan state transitions while preserving progress UI", async
 	assert.equal(statuses.at(-1), "dark:accent:● 0/2");
 	assert.ok(widgets.at(-1)?.every((line) => line.includes("dark:muted:○ ")));
 
-	await handlers.get("turn_end")?.(
-		{
-			message: {
-				role: "assistant",
-				content: [{ type: "text", text: "The first step is complete. [DONE:1]" }],
-			},
+	await endTurn({
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "The first step is complete. [DONE:1]" }],
 		},
-		ctx,
-	);
+	});
 	assert.equal(statuses.at(-1), "dark:accent:● 1/2");
 	assert.match(widgets.at(-1)?.[0] ?? "", /dark:success:✓ .*~Inspect the cache behavior~/);
 	assert.match(widgets.at(-1)?.[1] ?? "", /dark:muted:○ .*Apply the focused fix/);
@@ -180,17 +201,30 @@ test("publishes only plan state transitions while preserving progress UI", async
 	assert.match(updatedExecution.message.content, /Apply the focused fix/);
 	assert.equal((await startAgent()).message, undefined);
 
-	await handlers.get("turn_end")?.(
-		{
-			message: {
-				role: "assistant",
-				content: [{ type: "text", text: "The second step is complete. [DONE:2]" }],
-			},
+	await endTurn({
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "The second step is complete. [DONE:2]" }],
 		},
-		ctx,
-	);
+	});
 	assert.equal(statuses.at(-1), "dark:accent:● 2/2");
-	await handlers.get("agent_end")?.({ messages: [] }, ctx);
+	assert.notEqual(widgets.at(-1), undefined);
+	assert.equal(sentMessages.length, 2);
+	const stateAvailableBeforeAgentEnd = [...entries]
+		.reverse()
+		.find((entry) => entry.type === "custom_message" && entry.customType === "plan-normal-context");
+	assert.ok(stateAvailableBeforeAgentEnd);
+	assert.equal(entries.some((entry) => entry.type === "custom" && entry.customType === "plan-complete"), false);
+
+	await endTurn({
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "Completion already reported. [DONE:2]" }],
+		},
+	});
+	assert.equal(sentMessages.length, 2);
+
+	await endAgent({ messages: [] });
 	assert.equal(statuses.at(-1), undefined);
 	assert.equal(widgets.at(-1), undefined);
 	assert.equal(sentMessages.length, 2);

@@ -73,6 +73,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	let renderedWidget: string[] | undefined;
 	let hasRenderedStatus = false;
 	let hasRenderedWidget = false;
+	let completionTransitionQueued = false;
 
 	pi.registerFlag("plan", {
 		description: "Start in plan mode (read-only exploration)",
@@ -149,6 +150,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		planModeEnabled = !planModeEnabled;
 		executionMode = false;
 		todoItems = [];
+		completionTransitionQueued = false;
 
 		if (planModeEnabled) {
 			ctx.ui.notify("Plan mode enabled. Built-in write tools blocked.");
@@ -180,6 +182,14 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		description: "Toggle plan mode",
 		handler: async (ctx) => togglePlanMode(ctx),
 	});
+
+	function buildNormalState(): PlanStateMessage {
+		return {
+			kind: "normal",
+			customType: "plan-normal-context",
+			content: "[NORMAL MODE ACTIVE]\nPlan-mode restrictions are inactive.",
+		};
+	}
 
 	function buildPlanState(): PlanStateMessage {
 		if (planModeEnabled) {
@@ -224,11 +234,7 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 			};
 		}
 
-		return {
-			kind: "normal",
-			customType: "plan-normal-context",
-			content: "[NORMAL MODE ACTIVE]\nPlan-mode restrictions are inactive.",
-		};
+		return buildNormalState();
 	}
 
 	function getLatestPlanState(ctx: ExtensionContext): { kind: PlanStateKind; content: string } | undefined {
@@ -309,6 +315,17 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 			updateStatus(ctx);
 		}
 		persistState();
+
+		// Pi flushes triggerless custom messages immediately after turn_end. Queue the
+		// normal transition here so any continuation queued from agent_end sees it.
+		if (!completionTransitionQueued && todoItems.every((item) => item.completed)) {
+			completionTransitionQueued = true;
+			const normalState = buildNormalState();
+			pi.sendMessage(
+				{ customType: normalState.customType, content: normalState.content, display: false },
+				{ triggerTurn: false },
+			);
+		}
 	});
 
 	// Handle plan completion and plan mode UI
@@ -324,11 +341,15 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 				updateStatus(ctx);
 				persistState(); // Save cleared state so resume doesn't restore old execution mode
 
-				const normalState = buildPlanState();
-				pi.sendMessage(
-					{ customType: normalState.customType, content: normalState.content, display: false },
-					{ triggerTurn: false },
-				);
+				// Recovery fallback for sessions completed without observing the final turn_end.
+				if (!completionTransitionQueued) {
+					const normalState = buildNormalState();
+					pi.sendMessage(
+						{ customType: normalState.customType, content: normalState.content, display: false },
+						{ triggerTurn: false },
+					);
+				}
+				completionTransitionQueued = false;
 			}
 			return;
 		}
@@ -364,6 +385,7 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		if (choice?.startsWith("Execute")) {
 			planModeEnabled = false;
 			executionMode = true;
+			completionTransitionQueued = false;
 			updateStatus(ctx);
 			persistState();
 
