@@ -210,10 +210,28 @@ test("publishes only plan state transitions while preserving progress UI", async
 		(entry) => entry.type === "custom" && entry.customType === "plan-mode",
 	).length;
 	await updateMessage({
-		message: { role: "assistant", content: [{ type: "text", text: "The first step is complete. [DONE:" }] },
+		message: firstDoneMessage,
+		assistantMessageEvent: { type: "toolcall_delta", contentIndex: 1, delta: "ignored", partial: firstDoneMessage },
 	});
 	assert.equal(statuses.at(-1), "dark:accent:● 0/2");
-	await updateMessage({ message: firstDoneMessage });
+	const partialDoneMessage = {
+		role: "assistant",
+		content: [{ type: "text", text: "The first step is complete. [DONE:" }],
+	};
+	await updateMessage({
+		message: partialDoneMessage,
+		assistantMessageEvent: {
+			type: "text_delta",
+			contentIndex: 0,
+			delta: "The first step is complete. [DONE:",
+			partial: partialDoneMessage,
+		},
+	});
+	assert.equal(statuses.at(-1), "dark:accent:● 0/2");
+	await updateMessage({
+		message: firstDoneMessage,
+		assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "1]", partial: firstDoneMessage },
+	});
 	assert.equal(statuses.at(-1), "dark:accent:● 1/2");
 	await endMessage({ message: firstDoneMessage });
 	assert.equal(statuses.at(-1), "dark:accent:● 1/2");

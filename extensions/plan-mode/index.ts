@@ -74,6 +74,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	let hasRenderedStatus = false;
 	let hasRenderedWidget = false;
 	let completionTransitionQueued = false;
+	const streamingDoneCarry = new Map<number, string>();
 
 	pi.registerFlag("plan", {
 		description: "Start in plan mode (read-only exploration)",
@@ -305,24 +306,39 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		};
 	});
 
-	function applyCompletedSteps(message: AgentMessage, ctx: ExtensionContext): void {
-		if (!executionMode || todoItems.length === 0 || !isAssistantMessage(message)) return;
+	function applyCompletedText(text: string, ctx: ExtensionContext): void {
+		if (!executionMode || todoItems.length === 0) return;
 
 		const completedBefore = todoItems.filter((item) => item.completed).length;
-		markCompletedSteps(getTextContent(message), todoItems);
+		markCompletedSteps(text, todoItems);
 		if (todoItems.filter((item) => item.completed).length > completedBefore) {
 			updateStatus(ctx);
 		}
 	}
 
-	// Update progress in the same render cycle that first shows a complete [DONE:n] marker.
+	function applyCompletedSteps(message: AgentMessage, ctx: ExtensionContext): void {
+		if (!isAssistantMessage(message)) return;
+		applyCompletedText(getTextContent(message), ctx);
+	}
+
+	pi.on("message_start", async (event) => {
+		if (isAssistantMessage(event.message)) streamingDoneCarry.clear();
+	});
+
+	// Scan only new text, carrying enough trailing data to recognize split markers.
 	pi.on("message_update", async (event, ctx) => {
-		applyCompletedSteps(event.message, ctx);
+		const update = event.assistantMessageEvent;
+		if (update.type !== "text_delta") return;
+
+		const candidate = `${streamingDoneCarry.get(update.contentIndex) ?? ""}${update.delta}`;
+		applyCompletedText(candidate, ctx);
+		streamingDoneCarry.set(update.contentIndex, candidate.slice(-32));
 	});
 
 	// Keep finalized messages as a fallback for providers without streaming updates.
 	pi.on("message_end", async (event, ctx) => {
 		applyCompletedSteps(event.message, ctx);
+		if (isAssistantMessage(event.message)) streamingDoneCarry.clear();
 	});
 
 	// Persist progress and publish completion context after the turn's tool results.
@@ -484,5 +500,6 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		renderedWidget = undefined;
 		hasRenderedStatus = false;
 		hasRenderedWidget = false;
+		streamingDoneCarry.clear();
 	});
 }
