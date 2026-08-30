@@ -82,6 +82,11 @@ function createHarness(initialEntries: any[] = []) {
 		return result;
 	}
 
+	async function endMessage(event: any): Promise<void> {
+		agentRunActive = true;
+		await handlers.get("message_end")?.(event, ctx);
+	}
+
 	async function endTurn(event: any): Promise<void> {
 		agentRunActive = true;
 		await handlers.get("turn_end")?.(event, ctx);
@@ -101,6 +106,7 @@ function createHarness(initialEntries: any[] = []) {
 		eventHandlers,
 		handlers,
 		endAgent,
+		endMessage,
 		endTurn,
 		sentMessages,
 		setActiveToolsCalls,
@@ -124,6 +130,7 @@ test("publishes only plan state transitions while preserving progress UI", async
 		eventHandlers,
 		handlers,
 		endAgent,
+		endMessage,
 		endTurn,
 		sentMessages,
 		setActiveToolsCalls,
@@ -185,15 +192,31 @@ test("publishes only plan state transitions while preserving progress UI", async
 	assert.equal(statuses.at(-1), "dark:accent:● 0/2");
 	assert.ok(widgets.at(-1)?.every((line) => line.includes("dark:muted:○ ")));
 
-	await endTurn({
-		message: {
-			role: "assistant",
-			content: [{ type: "text", text: "The first step is complete. [DONE:1]" }],
-		},
-	});
+	const firstDoneMessage = {
+		role: "assistant",
+		content: [
+			{ type: "text", text: "The first step is complete. [DONE:1]" },
+			{ type: "toolCall", name: "bash", id: "next-step", arguments: { command: "pwd" } },
+		],
+	};
+	const persistedStatesBeforeMessageEnd = entries.filter(
+		(entry) => entry.type === "custom" && entry.customType === "plan-mode",
+	).length;
+	await endMessage({ message: firstDoneMessage });
 	assert.equal(statuses.at(-1), "dark:accent:● 1/2");
 	assert.match(widgets.at(-1)?.[0] ?? "", /dark:success:✓ .*~Inspect the cache behavior~/);
 	assert.match(widgets.at(-1)?.[1] ?? "", /dark:muted:○ .*Apply the focused fix/);
+	assert.equal(
+		entries.filter((entry) => entry.type === "custom" && entry.customType === "plan-mode").length,
+		persistedStatesBeforeMessageEnd,
+	);
+
+	await endTurn({ message: firstDoneMessage });
+	const persistedStatesAfterToolResult = entries.filter(
+		(entry) => entry.type === "custom" && entry.customType === "plan-mode",
+	);
+	assert.equal(persistedStatesAfterToolResult.length, persistedStatesBeforeMessageEnd + 1);
+	assert.equal(persistedStatesAfterToolResult.at(-1)?.data.todos[0].completed, true);
 
 	const updatedExecution = await startAgent();
 	assert.equal(updatedExecution.message.customType, "plan-execution-context");
@@ -201,14 +224,16 @@ test("publishes only plan state transitions while preserving progress UI", async
 	assert.match(updatedExecution.message.content, /Apply the focused fix/);
 	assert.equal((await startAgent()).message, undefined);
 
-	await endTurn({
-		message: {
-			role: "assistant",
-			content: [{ type: "text", text: "The second step is complete. [DONE:2]" }],
-		},
-	});
+	const secondDoneMessage = {
+		role: "assistant",
+		content: [{ type: "text", text: "The second step is complete. [DONE:2]" }],
+	};
+	await endMessage({ message: secondDoneMessage });
 	assert.equal(statuses.at(-1), "dark:accent:● 2/2");
 	assert.notEqual(widgets.at(-1), undefined);
+	assert.equal(sentMessages.length, 1);
+
+	await endTurn({ message: secondDoneMessage });
 	assert.equal(sentMessages.length, 2);
 	const stateAvailableBeforeAgentEnd = [...entries]
 		.reverse()

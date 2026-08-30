@@ -305,15 +305,28 @@ Immediately after completing step n, include [DONE:n] before starting the next s
 		};
 	});
 
-	// Track progress after each turn
+	function applyCompletedSteps(message: AgentMessage, ctx: ExtensionContext): void {
+		if (!executionMode || todoItems.length === 0 || !isAssistantMessage(message)) return;
+
+		const completedBefore = todoItems.filter((item) => item.completed).length;
+		markCompletedSteps(getTextContent(message), todoItems);
+		if (todoItems.filter((item) => item.completed).length > completedBefore) {
+			updateStatus(ctx);
+		}
+	}
+
+	// Update progress as soon as the assistant message is final, before its tool calls run.
+	pi.on("message_end", async (event, ctx) => {
+		applyCompletedSteps(event.message, ctx);
+	});
+
+	// Persist progress and publish completion context after the turn's tool results.
 	pi.on("turn_end", async (event, ctx) => {
 		if (!executionMode || todoItems.length === 0) return;
 		if (!isAssistantMessage(event.message)) return;
 
-		const text = getTextContent(event.message);
-		if (markCompletedSteps(text, todoItems) > 0) {
-			updateStatus(ctx);
-		}
+		// Keep turn_end as a fallback for runtimes or tests that do not emit message_end.
+		applyCompletedSteps(event.message, ctx);
 		persistState();
 
 		// Pi flushes triggerless custom messages immediately after turn_end. Queue the
