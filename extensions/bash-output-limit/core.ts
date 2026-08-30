@@ -105,8 +105,10 @@ export async function limitBashOutput(
   const maxBytes = input.maxKiB * 1024;
   if (totalBytes <= maxBytes) return undefined;
 
-  const headBytes = Math.floor(maxBytes / 5);
-  const tailBytes = maxBytes - headBytes;
+  const marker = "[... middle omitted ...]";
+  const windowBytes = maxBytes - Buffer.byteLength(marker, "utf8") - 2;
+  const headBytes = Math.floor(windowBytes / 5);
+  const tailBytes = windowBytes - headBytes;
   let fullOutputPath = existingPath;
   let windows: BashOutputWindows;
   try {
@@ -128,10 +130,8 @@ export async function limitBashOutput(
 
   const retainedHeadBytes = Buffer.byteLength(windows.head, "utf8");
   const retainedTailBytes = Buffer.byteLength(windows.tail, "utf8");
-  const retainedBytes = retainedHeadBytes + retainedTailBytes;
-  const omittedBytes = Math.max(0, totalBytes - retainedBytes);
-  const marker = `[... output truncated: ${formatSize(omittedBytes)} omitted ...]`;
   const truncatedContent = joinWindows(windows.head, marker, windows.tail);
+  const outputBytes = Buffer.byteLength(truncatedContent, "utf8");
   const totalLines = existingTruncation?.totalLines ?? countLines(body);
   const truncation = {
     content: truncatedContent,
@@ -139,8 +139,8 @@ export async function limitBashOutput(
     truncatedBy: "bytes" as const,
     totalLines,
     totalBytes,
-    outputLines: countLines(windows.head) + countLines(windows.tail) + 1,
-    outputBytes: retainedBytes,
+    outputLines: countLines(truncatedContent),
+    outputBytes,
     lastLinePartial: windows.tailStartsMidLine,
     firstLineExceedsLimit: false,
     maxLines: DEFAULT_MAX_LINES,

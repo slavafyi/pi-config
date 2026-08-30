@@ -489,9 +489,6 @@ const MODEL_ALIASES: Record<string, string> = {
   "gpt-5-6-terra": "gpt-5.6-terra",
 };
 
-// USD per million tokens. Sources: https://cursor.com/docs/models-and-pricing
-// and https://cursor.com/docs/models/. Older fallback models use the MIT-licensed
-// https://github.com/can1357/oh-my-pi catalog.
 const STANDARD_RATES: Record<string, TokenRates> = {
   "claude-fable-5": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 50 },
   "claude-haiku-4-5": { input: 1, cacheWrite: 1.25, cacheRead: 0.1, output: 5 },
@@ -521,7 +518,6 @@ const STANDARD_RATES: Record<string, TokenRates> = {
   "gpt-5.4-nano": { input: 0.2, cacheWrite: 0, cacheRead: 0.02, output: 1.25 },
   "gpt-5.5": { input: 5, cacheWrite: 0, cacheRead: 0.5, output: 30 },
   "gpt-5.6-luna": { input: 0.2, cacheWrite: 0.25, cacheRead: 0.02, output: 1.2 },
-  // Cursor promotional pricing through November 21, 2026.
   "gpt-5.6-sol": { input: 4, cacheWrite: 5, cacheRead: 0.4, output: 20 },
   "gpt-5.6-terra": { input: 2, cacheWrite: 2.5, cacheRead: 0.2, output: 12 },
   "grok-4.5": { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },

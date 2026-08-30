@@ -71,14 +71,16 @@ test("keeps UTF-8-safe head and tail windows and saves complete output", async (
   assert.equal(savedOutput, original);
   const output = outputText(result.content);
   assert.ok(output.startsWith("HEADER 🙂"));
-  assert.ok(output.includes("[... output truncated:"));
+  assert.ok(output.includes("[... middle omitted ...]"));
   assert.equal(output.includes("�"), false);
   assert.ok(output.includes("Command exited with code 1"));
   assert.ok(output.includes("showing first 2.0KB and last 8.0KB"));
   assert.ok(output.endsWith("Full output: /tmp/pi-bash-full.log]"));
   assert.equal(result.details.fullOutputPath, "/tmp/pi-bash-full.log");
   assert.equal(result.details.truncation?.maxBytes, 10 * 1024);
-  assert.ok((result.details.truncation?.outputBytes ?? Infinity) <= 10 * 1024);
+  const truncatedContent = result.details.truncation?.content ?? "";
+  assert.equal(result.details.truncation?.outputBytes, Buffer.byteLength(truncatedContent));
+  assert.ok(Buffer.byteLength(truncatedContent) <= 10 * 1024);
 });
 
 test("reuses Pi full output path and source totals", async () => {
@@ -125,7 +127,7 @@ test("reuses Pi full output path and source totals", async () => {
 
   assert.ok(result);
   assert.equal(saved, false);
-  assert.deepEqual(requestedBytes, [4 * 1024, 16 * 1024]);
+  assert.deepEqual(requestedBytes, [4090, 16364]);
   assert.equal(result.details.fullOutputPath, piPath);
   assert.equal(result.details.truncation?.totalLines, 5000);
   assert.equal(result.details.truncation?.totalBytes, totalBytes);
@@ -133,7 +135,7 @@ test("reuses Pi full output path and source totals", async () => {
   assert.equal(result.details.truncation?.lastLinePartial, true);
   const output = outputText(result.content);
   assert.ok(output.startsWith("line 1 "));
-  assert.ok(output.includes("[... output truncated:"));
+  assert.ok(output.includes("[... middle omitted ...]"));
   assert.ok(output.includes("line 5000 "));
   assert.equal(output.match(/Full output:/g)?.length, 1);
   assert.ok(output.endsWith(`Full output: ${piPath}]`));
@@ -179,7 +181,7 @@ test("uses Pi source totals when its visible tail is below the configured limit"
   assert.equal(result.details.truncation?.totalBytes, totalBytes);
   const output = outputText(result.content);
   assert.ok(output.startsWith("HEADER\n"));
-  assert.ok(output.includes("[... output truncated:"));
+  assert.ok(output.includes("[... middle omitted ...]"));
   assert.ok(output.endsWith(`Full output: ${piPath}]`));
 });
 

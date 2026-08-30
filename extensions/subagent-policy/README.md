@@ -42,8 +42,9 @@ do not require worktree isolation.
 ## Cache behavior
 
 The policy is appended to the system prompt with identical text on every parent
-run. Context usage is appended only as a short temporary suffix through Pi's
-`context` event, so changing usage does not rewrite the stable system prefix.
+run. Remaining context capacity is appended only as a short temporary suffix
+through Pi's `context` event, so changing usage does not rewrite the stable
+system prefix.
 
 ## Roles
 

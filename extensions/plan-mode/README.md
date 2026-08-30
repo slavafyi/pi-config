@@ -10,6 +10,7 @@ Read-only exploration mode for safe code analysis.
 - **Progress tracking**: Widget shows completion status during execution
 - **[DONE:n] markers**: Explicit step completion tracking
 - **Session persistence**: State survives session resume
+- **Local completion history**: Completed plans remain visible without entering model context
 - **Theme updates**: Footer status and progress widget follow theme changes
 
 ## Commands
@@ -43,17 +44,32 @@ Plan:
 - Bash commands filtered through allowlist
 - Agent creates a plan without making changes
 
-Mode state messages are append-only so earlier provider prompt prefixes remain
-cacheable. A short, stable system instruction tells the model that the newest
+Mode state transitions are append-only so earlier provider prompt prefixes
+remain cacheable. Repeated agent runs in the same state do not add duplicate
+messages. A short, stable system instruction tells the model that the newest
 state message supersedes earlier mode messages. That instruction is required;
 without it, resumed sessions and mode changes can leave contradictory active
 instructions in context.
 
 ### Execution Mode
-- Full tool access restored
+- Plan-mode restrictions are inactive; the normal active-tool configuration applies
 - Agent executes steps in order
 - `[DONE:n]` markers track completion
 - Widget shows progress
+- Completed plans render as TUI-only session entries
+
+Streaming progress is scanned incrementally with a short per-text-block tail so
+markers split across provider chunks are recognized without rescanning the full
+response. Final messages and completed turns provide fallback detection.
+Progress is persisted after tool results at `turn_end`.
+
+The hidden normal-state transition is queued at the final `turn_end`, where Pi
+flushes triggerless custom messages before any continuation queued by
+`agent_end`. If that final event was not observed, `agent_end` queues the same
+transition as a recovery path. The visible completion entry and cleared
+execution state are then recorded at `agent_end`. On resume, state is restored
+only from the active session branch, and completion markers are rescanned only
+after that branch's latest execution marker.
 
 ### Command Allowlist
 

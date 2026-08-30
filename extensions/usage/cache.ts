@@ -50,7 +50,7 @@ export function parseUsageCache(text: string): UsageCache {
         accountKey: entry.accountKey,
       };
     } catch {
-      // Ignore one malformed provider without discarding other cached reports.
+      continue;
     }
   }
   return result;
