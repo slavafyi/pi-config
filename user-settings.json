@@ -1,7 +1,9 @@
 {
   "extensions": {
-    "bash-output-limit": {
-      "maxKiB": 20
+    "tool-output-limit": {
+      "bash": 10,
+      "grep": 10,
+      "read": 10
     },
     "footer": {
       "showUnknownStatuses": false

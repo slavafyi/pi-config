@@ -6,12 +6,18 @@ import { StringDecoder } from "node:string_decoder";
 import type {
   BashToolDetails,
   ExtensionAPI,
+  GrepToolDetails,
+  ReadToolDetails,
+  ReadToolInput,
 } from "@earendil-works/pi-coding-agent";
 
 import { loadExtensionSettings } from "../shared/user-settings.ts";
 import {
   limitBashOutput,
-  parseBashOutputLimitConfig,
+  limitGrepOutput,
+  limitReadOutput,
+  parseToolOutputLimitConfig,
+  type ToolOutputLimitConfig,
 } from "./core.ts";
 
 async function saveFullOutput(output: string): Promise<string> {
@@ -67,26 +73,47 @@ async function readFullOutputWindows(
   }
 }
 
-export default function bashOutputLimit(pi: ExtensionAPI) {
-  let maxKiB: number | undefined;
+export default function toolOutputLimit(pi: ExtensionAPI) {
+  let config: ToolOutputLimitConfig = {};
 
   pi.on("session_start", () => {
-    maxKiB = parseBashOutputLimitConfig(
-      loadExtensionSettings("bash-output-limit"),
-    )?.maxKiB;
+    config = parseToolOutputLimitConfig(
+      loadExtensionSettings("tool-output-limit"),
+    ) ?? {};
   });
 
   pi.on("tool_result", async (event) => {
-    if (event.toolName !== "bash" || maxKiB === undefined) return;
+    if (event.toolName === "bash") {
+      const maxKiB = config.bash;
+      if (maxKiB === undefined) return;
+      return limitBashOutput({
+        content: event.content,
+        details: event.details as BashToolDetails | undefined,
+        maxKiB,
+        saveFullOutput,
+        readFullOutputWindows,
+      });
+    }
 
-    const patch = await limitBashOutput({
-      content: event.content,
-      details: event.details as BashToolDetails | undefined,
-      maxKiB,
-      saveFullOutput,
-      readFullOutputWindows,
-    });
-    if (!patch) return;
-    return patch;
+    if (event.toolName === "grep") {
+      const maxKiB = config.grep;
+      if (maxKiB === undefined) return;
+      return limitGrepOutput({
+        content: event.content,
+        details: event.details as GrepToolDetails | undefined,
+        maxKiB,
+      });
+    }
+
+    if (event.toolName === "read") {
+      const maxKiB = config.read;
+      if (maxKiB === undefined) return;
+      return limitReadOutput({
+        content: event.content,
+        details: event.details as ReadToolDetails | undefined,
+        toolInput: event.input as ReadToolInput,
+        maxKiB,
+      });
+    }
   });
 }
