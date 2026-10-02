@@ -40,6 +40,7 @@ const pi = {
   registerCommand: (name: string) => commands.push(name),
 };
 const ctx = {
+  model: { provider: "openai-codex" },
   getContextUsage: () => contextUsage,
 };
 
@@ -49,9 +50,7 @@ assert.deepEqual([...handlers.keys()].sort(), ["before_agent_start", "context"])
 assert.equal(handlers.has("tool_call"), false);
 
 const firstStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-const secondStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-assert.equal(firstStart.systemPrompt, `base\n\n${SUBAGENT_POLICY_PROMPT}`);
-assert.equal(secondStart.systemPrompt, firstStart.systemPrompt);
+assert.deepEqual(firstStart, { systemPrompt: `base\n\n${SUBAGENT_POLICY_PROMPT}` });
 assert.doesNotMatch(firstStart.systemPrompt, /Parent context remaining/);
 
 const stableMessages = [{ role: "user", content: "task", timestamp: 1 }];
@@ -62,18 +61,48 @@ assert.equal(firstContext.messages[1].customType, "subagent-policy-context-usage
 assert.equal(firstContext.messages[1].content, "Parent context remaining: 80,000/200,000 tokens.");
 
 contextUsage = { tokens: 130_000, contextWindow: 200_000, percent: 65 };
-const newTail = [
+const toolTail = [
   { role: "assistant", content: "Calling a tool", timestamp: 2 },
   { role: "toolResult", content: "A short result", timestamp: 3 },
 ];
-const secondContext = handlers.get("context")?.({ messages: [...stableMessages, ...newTail] }, ctx);
-assert.deepEqual(secondContext.messages.slice(0, stableMessages.length), stableMessages);
-assert.deepEqual(secondContext.messages.slice(stableMessages.length, -1), newTail);
-assert.equal(secondContext.messages.at(-1).customType, "subagent-policy-context-usage");
+const nextMessages = [...stableMessages, ...toolTail];
+const secondContext = handlers.get("context")?.({ messages: nextMessages }, ctx);
+assert.equal(nextMessages.length, 3);
+assert.deepEqual(secondContext.messages.slice(0, -1), nextMessages);
 assert.equal(secondContext.messages.at(-1).content, "Parent context remaining: 70,000/200,000 tokens.");
-assert.deepEqual(
-  secondContext.messages
-    .slice(stableMessages.length)
-    .map((message: { role: string }) => message.role),
-  ["assistant", "toolResult", "custom"],
-);
+assert.equal(firstContext.messages.at(-1).content, "Parent context remaining: 80,000/200,000 tokens.");
+assert.deepEqual(handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx), firstStart);
+
+// Cursor keeps the delegation policy, but receives no Pi context-usage snapshots.
+ctx.model.provider = "cursor";
+const cursorCtx = { ...ctx, getContextUsage: () => { throw new Error("Cursor must not read Pi usage"); } };
+assert.deepEqual(handlers.get("before_agent_start")?.({ systemPrompt: "base" }, cursorCtx), firstStart);
+assert.equal(handlers.get("context")?.({ messages: nextMessages }, cursorCtx), undefined);
+const oldSnapshot = {
+  role: "custom",
+  customType: "subagent-policy-context-usage",
+  content: "Parent context remaining at run start: 80,000/200,000 tokens.",
+  display: false,
+  timestamp: 0,
+};
+const otherCustom = { ...oldSnapshot, customType: "plan-mode-state", content: "Plan mode is active" };
+const savedMessages = [...stableMessages, oldSnapshot, otherCustom, ...toolTail];
+const cursorContext = handlers.get("context")?.({ messages: savedMessages }, cursorCtx);
+assert.deepEqual(cursorContext.messages, [...stableMessages, otherCustom, ...toolTail]);
+assert.equal(savedMessages.length, 5);
+assert.equal(savedMessages[1], oldSnapshot);
+assert.equal(handlers.get("context")?.({ messages: cursorContext.messages }, cursorCtx), undefined);
+contextUsage = { tokens: 140_000, contextWindow: 200_000, percent: 70 };
+
+for (const provider of ["openai-codex", "anthropic", "cursor"]) {
+  const withoutUsage = { model: { provider }, getContextUsage: () => undefined };
+  assert.deepEqual(
+    handlers.get("before_agent_start")?.({ systemPrompt: "base" }, withoutUsage),
+    firstStart,
+  );
+  assert.equal(handlers.get("context")?.({ messages: nextMessages }, withoutUsage), undefined);
+}
+
+ctx.model.provider = "anthropic";
+assert.match(handlers.get("context")?.({ messages: nextMessages }, ctx).messages.at(-1).content, /60,000/);
+assert.deepEqual(handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx), firstStart);

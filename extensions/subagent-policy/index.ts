@@ -10,7 +10,7 @@ export const SUBAGENT_POLICY_PROMPT = `
 --- SUBAGENT POLICY ---
 Delegation is optional. Evaluate all three gates silently before every Agent call. Calling Agent certifies that all three gates passed. If any gate fails, continue locally without announcing the decision.
 
-Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish within its remaining context without a large or noisy investigation, or when isolated independent execution or review is needed. Use the latest parent-context snapshot; do not use a fixed percentage threshold.
+Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish within its remaining context without a large or noisy investigation, or when isolated independent execution or review is needed. Use the latest parent-context snapshot when supplied; otherwise treat remaining capacity as unknown. Do not use a fixed percentage threshold.
 
 Gate 2 — Independent value: delegate a distinct investigation, challenge, implementation, or review. Do not duplicate parent or sibling work or seek reassurance by vote.
 
@@ -41,6 +41,12 @@ export default function subagentPolicy(pi: ExtensionAPI) {
   }));
 
   pi.on("context", (event, ctx) => {
+    if (ctx.model?.provider === "cursor") {
+      const messages = event.messages.filter((message) =>
+        message.role !== "custom" || message.customType !== "subagent-policy-context-usage",
+      );
+      return messages.length === event.messages.length ? undefined : { messages };
+    }
     const usage = formatContextUsage(ctx.getContextUsage());
     if (!usage) return;
     return {
