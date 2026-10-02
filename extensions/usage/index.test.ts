@@ -44,11 +44,11 @@ function cursorToken(subject: string, suffix: string): string {
   ].join(".");
 }
 
-function cursorReport(): string {
+function cursorReport(apiPercentUsed = 30): string {
   return JSON.stringify({
     billingCycleStart: Date.now() - 86_400_000,
     billingCycleEnd: Date.now() + 30 * 86_400_000,
-    planUsage: { totalPercentUsed: 10, autoPercentUsed: 20, apiPercentUsed: 30 },
+    planUsage: { totalPercentUsed: 10, autoPercentUsed: 20, apiPercentUsed },
   });
 }
 
@@ -388,7 +388,7 @@ test("uses the retried Cursor account after credential rotation", async (t) => {
     return new Response(cursorReport());
   });
   try {
-    const staleReport = parseCursorUsagePayload(cursorReport());
+    const staleReport = parseCursorUsagePayload(cursorReport(40));
     const state = await setup({
       agentDir,
       provider: "cursor",

@@ -42,9 +42,14 @@ do not require worktree isolation.
 ## Cache behavior
 
 The policy is appended to the system prompt with identical text on every parent
-run. Remaining context capacity is appended only as a short temporary suffix
-through Pi's `context` event, so changing usage does not rewrite the stable
-system prefix.
+run. Remaining context capacity is captured once in `before_agent_start` and
+persisted as a hidden custom message. The snapshot describes usage at run start,
+not a live counter, and does not rewrite the stable system prefix.
+
+Do not append transient usage messages in the `context` hook: moving that user-like
+message after each tool result changes the transcript during a Cursor SDK run
+and can restart work instead of continuing its tool replay. A persisted snapshot
+stays in the same position throughout tool continuations and session resume.
 
 ## Roles
 
@@ -68,6 +73,7 @@ the safe default:
   "defaultJoinMode": "smart",
   "backgroundByDefault": false,
   "schedulingEnabled": false,
+  "workflowsEnabled": false,
   "maxSubagentDepth": 1,
   "disableDefaultAgents": true,
   "fallbackSubagent": "none",
@@ -76,8 +82,10 @@ the safe default:
 }
 ```
 
-The fifth background agent queues. Foreground calls bypass this queue. Nesting
-and scheduling remain disabled.
+The fifth background agent queues. Foreground calls bypass this queue. Nesting,
+scheduling, and workflows remain disabled. `SubagentWorkflow` has its own
+concurrency limits and is not covered by the current policy's `Agent` gates;
+review both before enabling workflows.
 
 ## Validation
 

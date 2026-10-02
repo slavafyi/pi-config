@@ -3,6 +3,7 @@
   "defaultJoinMode": "smart",
   "backgroundByDefault": false,
   "schedulingEnabled": false,
+  "workflowsEnabled": false,
   "maxSubagentDepth": 1,
   "disableDefaultAgents": true,
   "fallbackSubagent": "none",
