@@ -42,14 +42,14 @@ do not require worktree isolation.
 ## Cache behavior
 
 The policy is appended to the system prompt with identical text on every parent
-run. Remaining context capacity is captured once in `before_agent_start` and
-persisted as a hidden custom message. The snapshot describes usage at run start,
-not a live counter, and does not rewrite the stable system prefix.
+run. For providers other than Cursor, remaining context capacity is appended as a
+short temporary suffix through Pi's `context` event before each model request.
+It is not persisted in the session and does not rewrite the stable system prefix.
 
-Do not append transient usage messages in the `context` hook: moving that user-like
-message after each tool result changes the transcript during a Cursor SDK run
-and can restart work instead of continuing its tool replay. A persisted snapshot
-stays in the same position throughout tool continuations and session resume.
+Cursor temporarily keeps a hidden, persisted snapshot from `before_agent_start`.
+It describes usage at run start, not a live counter. Appending transient user-like
+messages after tool results can restart work in Cursor SDK instead of continuing
+its native replay. A live Cursor-specific mechanism remains a separate decision.
 
 ## Roles
 

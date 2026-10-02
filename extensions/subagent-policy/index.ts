@@ -25,20 +25,22 @@ Any change after review invalidates the verdict. Re-review the final artifact or
 Parallel writers must use separate git worktrees. Worktree isolation is optional for read-only agents and a sole writer.
 --- END SUBAGENT POLICY ---`;
 
-export function formatContextUsage(usage: ContextUsage | undefined): string | undefined {
+export function formatContextUsage(usage: ContextUsage | undefined, atRunStart = false): string | undefined {
   if (!usage) return undefined;
+  const timing = atRunStart ? " at run start" : "";
   if (usage.tokens === null) {
-    return `Parent context at run start: usage temporarily unknown after compaction; context window ${usage.contextWindow.toLocaleString("en-US")} tokens.`;
+    return `Parent context${timing}: usage temporarily unknown after compaction; context window ${usage.contextWindow.toLocaleString("en-US")} tokens.`;
   }
 
   const remaining = Math.max(0, usage.contextWindow - usage.tokens);
-  return `Parent context remaining at run start: ${remaining.toLocaleString("en-US")}/${usage.contextWindow.toLocaleString("en-US")} tokens.`;
+  return `Parent context remaining${timing}: ${remaining.toLocaleString("en-US")}/${usage.contextWindow.toLocaleString("en-US")} tokens.`;
 }
 
 export default function subagentPolicy(pi: ExtensionAPI) {
   pi.on("before_agent_start", (event, ctx) => {
     const systemPrompt = `${event.systemPrompt}\n\n${SUBAGENT_POLICY_PROMPT}`;
-    const usage = formatContextUsage(ctx.getContextUsage());
+    if (ctx.model?.provider !== "cursor") return { systemPrompt };
+    const usage = formatContextUsage(ctx.getContextUsage(), true);
     if (!usage) return { systemPrompt };
     return {
       systemPrompt,
@@ -47,6 +49,24 @@ export default function subagentPolicy(pi: ExtensionAPI) {
         content: usage,
         display: false,
       },
+    };
+  });
+
+  pi.on("context", (event, ctx) => {
+    if (ctx.model?.provider === "cursor") return;
+    const usage = formatContextUsage(ctx.getContextUsage());
+    if (!usage) return;
+    return {
+      messages: [
+        ...event.messages,
+        {
+          role: "custom",
+          customType: "subagent-policy-context-usage",
+          content: usage,
+          display: false,
+          timestamp: Date.now(),
+        },
+      ],
     };
   });
 }

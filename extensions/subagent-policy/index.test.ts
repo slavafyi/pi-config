@@ -5,11 +5,11 @@ import subagentPolicy, { formatContextUsage, SUBAGENT_POLICY_PROMPT } from "./in
 assert.equal(formatContextUsage(undefined), undefined);
 assert.equal(
   formatContextUsage({ tokens: 120_000, contextWindow: 200_000, percent: 60 }),
-  "Parent context remaining at run start: 80,000/200,000 tokens.",
+  "Parent context remaining: 80,000/200,000 tokens.",
 );
 assert.equal(
   formatContextUsage({ tokens: null, contextWindow: 200_000, percent: null }),
-  "Parent context at run start: usage temporarily unknown after compaction; context window 200,000 tokens.",
+  "Parent context: usage temporarily unknown after compaction; context window 200,000 tokens.",
 );
 
 assert.match(SUBAGENT_POLICY_PROMPT, /Calling Agent certifies that all three gates passed/);
@@ -40,31 +40,64 @@ const pi = {
   registerCommand: (name: string) => commands.push(name),
 };
 const ctx = {
+  model: { provider: "openai-codex" },
   getContextUsage: () => contextUsage,
 };
 
 subagentPolicy(pi as any);
 assert.deepEqual(commands, []);
-assert.deepEqual([...handlers.keys()], ["before_agent_start"]);
-assert.equal(handlers.has("context"), false, "tool continuations must not gain transient user messages");
+assert.deepEqual([...handlers.keys()].sort(), ["before_agent_start", "context"]);
 assert.equal(handlers.has("tool_call"), false);
 
 const firstStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-assert.equal(firstStart.systemPrompt, `base\n\n${SUBAGENT_POLICY_PROMPT}`);
+assert.deepEqual(firstStart, { systemPrompt: `base\n\n${SUBAGENT_POLICY_PROMPT}` });
 assert.doesNotMatch(firstStart.systemPrompt, /Parent context remaining/);
-assert.deepEqual(firstStart.message, {
-  customType: "subagent-policy-context-usage",
-  content: "Parent context remaining at run start: 80,000/200,000 tokens.",
-  display: false,
-});
+
+const stableMessages = [{ role: "user", content: "task", timestamp: 1 }];
+const firstContext = handlers.get("context")?.({ messages: stableMessages }, ctx);
+assert.equal(stableMessages.length, 1);
+assert.equal(firstContext.messages.length, 2);
+assert.equal(firstContext.messages[1].customType, "subagent-policy-context-usage");
+assert.equal(firstContext.messages[1].content, "Parent context remaining: 80,000/200,000 tokens.");
 
 contextUsage = { tokens: 130_000, contextWindow: 200_000, percent: 65 };
-const secondStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-assert.equal(secondStart.systemPrompt, firstStart.systemPrompt);
-assert.equal(secondStart.message.content, "Parent context remaining at run start: 70,000/200,000 tokens.");
-assert.equal(firstStart.message.content, "Parent context remaining at run start: 80,000/200,000 tokens.");
+const toolTail = [
+  { role: "assistant", content: "Calling a tool", timestamp: 2 },
+  { role: "toolResult", content: "A short result", timestamp: 3 },
+];
+const nextMessages = [...stableMessages, ...toolTail];
+const secondContext = handlers.get("context")?.({ messages: nextMessages }, ctx);
+assert.equal(nextMessages.length, 3);
+assert.deepEqual(secondContext.messages.slice(0, -1), nextMessages);
+assert.equal(secondContext.messages.at(-1).content, "Parent context remaining: 70,000/200,000 tokens.");
+assert.equal(firstContext.messages.at(-1).content, "Parent context remaining: 80,000/200,000 tokens.");
+assert.deepEqual(handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx), firstStart);
 
-const withoutUsage = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, {
-  getContextUsage: () => undefined,
+// Cursor keeps its existing run-start snapshot, never a transient continuation suffix.
+ctx.model.provider = "cursor";
+const cursorStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
+assert.equal(cursorStart.systemPrompt, firstStart.systemPrompt);
+assert.deepEqual(cursorStart.message, {
+  customType: "subagent-policy-context-usage",
+  content: "Parent context remaining at run start: 70,000/200,000 tokens.",
+  display: false,
 });
-assert.deepEqual(withoutUsage, { systemPrompt: firstStart.systemPrompt });
+assert.equal(handlers.get("context")?.({ messages: nextMessages }, ctx), undefined);
+contextUsage = { tokens: 140_000, contextWindow: 200_000, percent: 70 };
+assert.equal(handlers.get("context")?.({ messages: nextMessages }, ctx), undefined);
+assert.equal(cursorStart.message.content, "Parent context remaining at run start: 70,000/200,000 tokens.");
+const nextCursorStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
+assert.equal(nextCursorStart.message.content, "Parent context remaining at run start: 60,000/200,000 tokens.");
+
+for (const provider of ["openai-codex", "anthropic", "cursor"]) {
+  const withoutUsage = { model: { provider }, getContextUsage: () => undefined };
+  assert.deepEqual(
+    handlers.get("before_agent_start")?.({ systemPrompt: "base" }, withoutUsage),
+    firstStart,
+  );
+  assert.equal(handlers.get("context")?.({ messages: nextMessages }, withoutUsage), undefined);
+}
+
+ctx.model.provider = "anthropic";
+assert.match(handlers.get("context")?.({ messages: nextMessages }, ctx).messages.at(-1).content, /60,000/);
+assert.deepEqual(handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx), firstStart);
