@@ -66,14 +66,6 @@ pnpm install --prod=false
 pi update --extensions
 ```
 
-Package sources are pinned. `pi update --extensions` reconciles those exact
-versions; it does not advance the pins in `settings.json`. Review upstream
-changes before changing a pin.
-
-The dotfiles Fish function `pi-update` updates Pi and reconciles packages, then
-copies `handoff.ts` and `notify.ts` from the installed Pi examples. Run `/reload`
-after updating extensions, or restart Pi when the CLI itself changed.
-
 ## Agents
 
 | Agent | Purpose |
@@ -120,13 +112,6 @@ Packages are declared in `settings.json` and pinned to immutable git commits or 
 | [pi-context-view](https://github.com/dimk90/pi-context-view) | Context usage visualization and inspection of system prompt, tools, and extension injections |
 | [pi-copy-code](https://github.com/penumbral-labs/pi-copy-code) | Copy code blocks and blockquotes from recent assistant messages |
 | [pi-session-recall](https://www.npmjs.com/package/@ogulcancelik/pi-session-recall) | Search across previous sessions |
-
-Pi Voice replaces pi-transcribe. Back up `pi-transcribe.json` before its first
-use: upstream migrates settings to `pi-voice.json` and removes the legacy file.
-Use `/voice-settings` (`/transcribe` remains an alias).
-
-Session recall's query model is configured in `session-recall.json`; the
-`/session-recall` model picker was removed in 1.0.7.
 
 Pi packages run with full system access. Review third-party package source code
 before using this configuration.
