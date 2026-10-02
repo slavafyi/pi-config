@@ -42,16 +42,9 @@ do not require worktree isolation.
 ## Cache behavior
 
 The policy is appended to the system prompt with identical text on every parent
-run. For providers other than Cursor, remaining context capacity is appended as a
-short temporary suffix through Pi's `context` event before each model request.
-It is not persisted in the session and does not rewrite the stable system prefix.
-
-Cursor receives no Pi context-usage snapshots. Old snapshots from resumed
-sessions are filtered out of requests to Cursor without deleting session entries.
-The delegation policy and subagent tools remain available, but the parent treats
-remaining capacity as unknown. Pi's context display is unchanged. Appending
-transient user-like messages after tool results can restart work in Cursor SDK
-instead of continuing its native replay.
+run. Remaining context capacity is appended as a short temporary suffix through
+Pi's `context` event before each model request. It is not persisted in the session
+and does not rewrite the stable system prefix.
 
 ## Roles
 

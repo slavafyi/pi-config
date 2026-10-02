@@ -41,12 +41,6 @@ export default function subagentPolicy(pi: ExtensionAPI) {
   }));
 
   pi.on("context", (event, ctx) => {
-    if (ctx.model?.provider === "cursor") {
-      const messages = event.messages.filter((message) =>
-        message.role !== "custom" || message.customType !== "subagent-policy-context-usage",
-      );
-      return messages.length === event.messages.length ? undefined : { messages };
-    }
     const usage = formatContextUsage(ctx.getContextUsage());
     if (!usage) return;
     return {
