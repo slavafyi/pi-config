@@ -24,15 +24,6 @@ const codexReport: UsageReport = [{
   },
 }];
 
-function cursorReport(resetsAt?: string): UsageReport {
-  const window = { usedPercent: 20, windowMinutes: 44_640, ...(resetsAt ? { resetsAt } : {}) };
-  return [{
-    provider: "cursor",
-    source: "cursor-agent",
-    usage: { primary: window, secondary: window, tertiary: window },
-  }];
-}
-
 function cached(
   report: UsageReport,
   fetchedAt = 1_000,
@@ -41,12 +32,13 @@ function cached(
   return { report, fetchedAt, accountKey };
 }
 
-test("parses account-scoped persistent usage reports independently", () => {
+test("parses only Codex persistent usage reports", () => {
   const valid = cached(codexReport, 123);
   const cache = parseUsageCache(JSON.stringify({
     version: 2,
     reports: {
       codex: valid,
+      unsupported: cached([{ ...codexReport[0]!, provider: "unsupported" }]),
       missingAccount: { report: codexReport, fetchedAt: 456 },
       broken: { report: { nope: true }, fetchedAt: 789, accountKey: "other" },
     },
@@ -63,33 +55,33 @@ test("invalidates the previous cache version", () => {
 
 test("accepts only matching, bounded cache entries", () => {
   const value = cached(codexReport, 1_000, "one");
-  assert.equal(isCachedUsageUsable(value, "codex", "one", 1_999, 1_000), true);
+  assert.equal(isCachedUsageUsable(value, "one", 1_999, 1_000), true);
   assert.equal(isCachedUsageFresh(value, 1_500, 1_000), true);
-  assert.equal(isCachedUsageUsable(value, "codex", "two", 1_999, 1_000), false);
-  assert.equal(isCachedUsageUsable(value, "codex", "one", 2_000, 1_000), false);
-  assert.equal(isCachedUsageUsable(value, "codex", "one", 999, 1_000), false);
+  assert.equal(isCachedUsageUsable(value, "two", 1_999, 1_000), false);
+  assert.equal(isCachedUsageUsable(value, "one", 2_000, 1_000), false);
+  assert.equal(isCachedUsageUsable(value, "one", 999, 1_000), false);
+  assert.equal(cachedUsageExpiresAt(value, 1_000), 2_000);
 });
 
-test("rejects Cursor cache at or after its billing reset", () => {
-  const beforeReset = cached(cursorReport("2026-08-20T10:00:00Z"), 1);
-  const before = Date.parse("2026-08-20T09:59:59Z");
-  const at = Date.parse("2026-08-20T10:00:00Z");
-  assert.equal(isCachedUsageUsable(beforeReset, "cursor", "account-key", before, Infinity), true);
-  assert.equal(isCachedUsageUsable(beforeReset, "cursor", "account-key", at, Infinity), false);
-  assert.equal(cachedUsageExpiresAt(beforeReset, "cursor", Infinity), at);
-  assert.equal(
-    isCachedUsageUsable(cached(cursorReport(), 1), "cursor", "account-key", before, Infinity),
-    false,
-  );
+test("discards non-Codex entries inside a persisted report", () => {
+  const valid = cached(codexReport);
+  const unsupported = { ...codexReport[0]!, provider: "unsupported" };
+  assert.deepEqual(parseUsageCache(JSON.stringify({
+    version: 2,
+    reports: { codex: cached([...codexReport, unsupported]) },
+  })), { codex: valid });
+  assert.deepEqual(parseUsageCache(JSON.stringify({
+    version: 2,
+    reports: { codex: cached([unsupported]) },
+  })), {});
 });
 
 test("merges provider caches without losing the newest entry", () => {
   const oldCodex = cached(codexReport, 1, "codex");
   const newCodex = cached(codexReport, 3, "codex");
-  const cursor = cached(cursorReport("2099-01-01T00:00:00Z"), 2, "cursor");
   assert.deepEqual(
-    mergeUsageCaches({ codex: oldCodex }, { cursor }, { codex: newCodex }),
-    { codex: newCodex, cursor },
+    mergeUsageCaches({ codex: oldCodex }, { codex: newCodex }, { codex: oldCodex }),
+    { codex: newCodex },
   );
 });
 

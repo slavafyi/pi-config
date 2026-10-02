@@ -17,15 +17,12 @@ import {
   isAuthenticationError,
   parseCodexRateLimitHeaders,
   parseCodexUsagePayload,
-  parseCursorUsagePayload,
-  patchCursorMessageCost,
   selectQuota,
   styleQuotaStatus,
   type QuotaStatus,
   type UsageReport,
 } from "./core.ts";
-import { resolveCursorAccessToken } from "./credentials.ts";
-import { codexAccountFingerprint, cursorAccountFingerprint } from "./identity.ts";
+import { codexAccountFingerprint } from "./identity.ts";
 import { FOOTER_INVALIDATE_EVENT } from "../footer/events.ts";
 
 const STATUS_ID = "usage";
@@ -34,34 +31,19 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const SPINNER_DELAY_MS = 150;
 const SPINNER_INTERVAL_MS = 100;
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const USAGE_PROVIDERS: Record<string, UsageProvider> = {
-  "openai-codex": "codex",
-  cursor: "cursor",
-};
 const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
-const CURSOR_USAGE_URL =
-  "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage";
-
-type UsageProvider = "codex" | "cursor";
 type UsageDisplay =
   | { type: "quota"; quotas: QuotaStatus[] }
-  | { type: "unavailable"; provider: string }
+  | { type: "unavailable" }
   | { type: "spinner"; frame: string };
-type UsageAccess =
-  | { provider: "codex"; token: string; accountId: string; accountKey: string }
-  | { provider: "cursor"; token: string; accountKey: string };
+interface UsageAccess {
+  token: string;
+  accountId: string;
+  accountKey: string;
+}
 interface FetchedUsage {
   report: UsageReport;
   accountKey: string;
-}
-
-class AccountChangedUsageError extends Error {
-  readonly accountKey: string;
-
-  constructor(accountKey: string, cause: unknown) {
-    super("usage account changed while refreshing credentials", { cause });
-    this.accountKey = accountKey;
-  }
 }
 
 function codexAccountId(token: string): string {
@@ -91,27 +73,10 @@ async function resolveCodexAccess(ctx: ExtensionContext): Promise<UsageAccess> {
   }
   const accountId = codexAccountId(token);
   return {
-    provider: "codex",
     token,
     accountId,
     accountKey: codexAccountFingerprint(accountId),
   };
-}
-
-async function resolveCursorAccess(pi: ExtensionAPI): Promise<UsageAccess> {
-  const token = await resolveCursorAccessToken({
-    exec: async (command, args) => pi.exec(command, args, { timeout: 3_000 }),
-  });
-  if (!token) throw new Error("Cursor authentication is unavailable");
-  return { provider: "cursor", token, accountKey: cursorAccountFingerprint(token) };
-}
-
-function resolveUsageAccess(
-  provider: UsageProvider,
-  pi: ExtensionAPI,
-  ctx: ExtensionContext,
-): Promise<UsageAccess> {
-  return provider === "codex" ? resolveCodexAccess(ctx) : resolveCursorAccess(pi);
 }
 
 async function fetchUsageJson(
@@ -127,7 +92,7 @@ async function fetchUsageJson(
 }
 
 async function fetchCodexUsage(
-  access: Extract<UsageAccess, { provider: "codex" }>,
+  access: UsageAccess,
 ): Promise<FetchedUsage> {
   const result = await fetchUsageJson(CODEX_USAGE_URL, {
     headers: {
@@ -144,50 +109,6 @@ async function fetchCodexUsage(
     throw new Error(`OpenAI usage returned HTTP ${result.status}`);
   }
   return { report: parseCodexUsagePayload(result.text), accountKey: access.accountKey };
-}
-
-function cursorRequest(token: string): Promise<{ status: number; text: string }> {
-  return fetchUsageJson(CURSOR_USAGE_URL, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-      "Connect-Protocol-Version": "1",
-      "Content-Type": "application/json",
-      "User-Agent": "pi-usage",
-    },
-    body: "{}",
-  });
-}
-
-async function fetchCursorUsage(
-  pi: ExtensionAPI,
-  initialAccess: Extract<UsageAccess, { provider: "cursor" }>,
-): Promise<FetchedUsage> {
-  let access = initialAccess;
-  try {
-    let result = await cursorRequest(access.token);
-    if (result.status === 401 || result.status === 403) {
-      access = await resolveCursorAccess(pi) as Extract<UsageAccess, { provider: "cursor" }>;
-      result = await cursorRequest(access.token);
-    }
-    if (result.status === 401 || result.status === 403) {
-      throw new Error("Cursor authentication is unavailable");
-    }
-    if (result.status < 200 || result.status >= 300) {
-      throw new Error(`Cursor usage returned HTTP ${result.status}`);
-    }
-    return { report: parseCursorUsagePayload(result.text), accountKey: access.accountKey };
-  } catch (error) {
-    if (access.accountKey !== initialAccess.accountKey) {
-      throw new AccountChangedUsageError(access.accountKey, error);
-    }
-    throw error;
-  }
-}
-
-function fetchProviderUsage(pi: ExtensionAPI, access: UsageAccess): Promise<FetchedUsage> {
-  return access.provider === "codex" ? fetchCodexUsage(access) : fetchCursorUsage(pi, access);
 }
 
 export default async function usage(pi: ExtensionAPI) {
@@ -211,10 +132,6 @@ export default async function usage(pi: ExtensionAPI) {
   let cacheWrite = Promise.resolve();
   let pendingCodexAccountKey: string | undefined;
 
-  function quotaKey(provider: string, modelId: string): string {
-    return provider === "cursor" ? `cursor:${modelId}` : provider;
-  }
-
   function cacheSnapshot(): UsageCache {
     return Object.fromEntries(cache);
   }
@@ -224,9 +141,9 @@ export default async function usage(pi: ExtensionAPI) {
     for (const [provider, cached] of Object.entries(next)) cache.set(provider, cached);
   }
 
-  function saveReport(provider: UsageProvider, report: UsageReport, accountKey: string) {
+  function saveReport(report: UsageReport, accountKey: string) {
     const entry: CachedUsageReport = { report, fetchedAt: Date.now(), accountKey };
-    cache.set(provider, entry);
+    cache.set("codex", entry);
     const snapshot = cacheSnapshot();
     cacheWrite = cacheWrite
       .catch(() => undefined)
@@ -239,20 +156,17 @@ export default async function usage(pi: ExtensionAPI) {
     return cacheWrite;
   }
 
-  async function loadReport(
-    provider: UsageProvider,
-    access: UsageAccess,
-  ): Promise<FetchedUsage> {
+  async function loadReport(access: UsageAccess): Promise<FetchedUsage> {
     const now = Date.now();
-    const cached = cache.get(provider);
+    const cached = cache.get("codex");
     if (
-      isCachedUsageUsable(cached, provider, access.accountKey, now) &&
+      isCachedUsageUsable(cached, access.accountKey, now) &&
       isCachedUsageFresh(cached, now, TTL_MS)
     ) {
       return { report: cached.report, accountKey: cached.accountKey };
     }
 
-    const flightKey = `${provider}:${access.accountKey}`;
+    const flightKey = access.accountKey;
     const pending = inFlight.get(flightKey);
     if (pending) return pending;
     const request = (async () => {
@@ -261,26 +175,26 @@ export default async function usage(pi: ExtensionAPI) {
         const disk = await readUsageCache(cachePath);
         const merged = mergeUsageCaches(disk, cacheSnapshot());
         replaceCache(merged);
-        const lockedCached = cache.get(provider);
+        const lockedCached = cache.get("codex");
         const lockedNow = Date.now();
         if (
-          isCachedUsageUsable(lockedCached, provider, access.accountKey, lockedNow) &&
+          isCachedUsageUsable(lockedCached, access.accountKey, lockedNow) &&
           isCachedUsageFresh(lockedCached, lockedNow, TTL_MS)
         ) {
           return { report: lockedCached.report, accountKey: lockedCached.accountKey };
         }
 
-        const fetched = await fetchProviderUsage(pi, access);
+        const fetched = await fetchCodexUsage(access);
         const entry: CachedUsageReport = {
           report: fetched.report,
           fetchedAt: Date.now(),
           accountKey: fetched.accountKey,
         };
-        if (!isCachedUsageUsable(entry, provider, fetched.accountKey)) {
-          throw new Error(`${provider} usage snapshot is already expired`);
+        if (!isCachedUsageUsable(entry, fetched.accountKey)) {
+          throw new Error("codex usage snapshot is already expired");
         }
         const next = mergeUsageCaches(disk, cacheSnapshot());
-        next[provider] = entry;
+        next.codex = entry;
         await writeUsageCache(cachePath, next);
         replaceCache(next);
         return fetched;
@@ -312,8 +226,7 @@ export default async function usage(pi: ExtensionAPI) {
         .join("  ");
     }
     if (display.type === "unavailable") {
-      const text = display.provider === "cursor" ? "Cursor: unavailable" : "OpenAI: unavailable";
-      return ctx.ui.theme.fg("dim", text);
+      return ctx.ui.theme.fg("dim", "OpenAI: unavailable");
     }
     return ctx.ui.theme.fg("dim", display.frame);
   }
@@ -340,12 +253,10 @@ export default async function usage(pi: ExtensionAPI) {
   }
 
   function isCurrentRequest(ctx: ExtensionContext, key: string, requestGeneration: number): boolean {
-    const provider = ctx.model?.provider;
     return (
       activeCtx === ctx &&
       generation === requestGeneration &&
-      Boolean(provider) &&
-      quotaKey(provider!, ctx.model?.id ?? "") === key
+      ctx.model?.provider === key
     );
   }
 
@@ -389,23 +300,19 @@ export default async function usage(pi: ExtensionAPI) {
   function showUnavailable(
     ctx: ExtensionContext,
     key: string,
-    provider: string,
     accountKey?: string,
   ) {
     stopSpinner();
-    setDisplay(ctx, key, { type: "unavailable", provider }, accountKey);
+    setDisplay(ctx, key, { type: "unavailable" }, accountKey);
   }
 
   function cachedQuota(
-    provider: string,
-    modelId: string,
     accountKey: string,
   ): { quotas: QuotaStatus[]; expiresAt: number } | undefined {
-    const source = USAGE_PROVIDERS[provider];
-    const cached = source ? cache.get(source) : undefined;
-    if (!source || !isCachedUsageUsable(cached, source, accountKey)) return undefined;
-    const quotas = selectQuota(cached.report, provider, modelId).quotas;
-    const expiresAt = cachedUsageExpiresAt(cached, source);
+    const cached = cache.get("codex");
+    if (!isCachedUsageUsable(cached, accountKey)) return undefined;
+    const quotas = selectQuota(cached.report).quotas;
+    const expiresAt = cachedUsageExpiresAt(cached);
     return quotas?.length && expiresAt !== undefined ? { quotas, expiresAt } : undefined;
   }
 
@@ -413,15 +320,13 @@ export default async function usage(pi: ExtensionAPI) {
     if (!ctx.hasUI) return;
     const requestGeneration = ++generation;
     const provider = ctx.model?.provider;
-    const modelId = ctx.model?.id ?? "";
-    const usageProvider = provider ? USAGE_PROVIDERS[provider] : undefined;
-    if (!provider || !usageProvider) {
+    if (provider !== "openai-codex") {
       stopSpinner();
       setDisplay(ctx, undefined, undefined);
       return;
     }
 
-    const key = quotaKey(provider, modelId);
+    const key = provider;
     if (displayKey !== key) {
       stopSpinner();
       setDisplay(ctx, key, undefined);
@@ -432,16 +337,16 @@ export default async function usage(pi: ExtensionAPI) {
 
     let access: UsageAccess;
     try {
-      access = await resolveUsageAccess(usageProvider, pi, ctx);
+      access = await resolveCodexAccess(ctx);
     } catch {
       if (isCurrentRequest(ctx, key, requestGeneration)) {
-        showUnavailable(ctx, key, provider);
+        showUnavailable(ctx, key);
       }
       return;
     }
     if (!isCurrentRequest(ctx, key, requestGeneration)) return;
 
-    const stale = cachedQuota(provider, modelId, access.accountKey);
+    const stale = cachedQuota(access.accountKey);
     if (display?.type === "spinner") {
       displayAccountKey = access.accountKey;
     } else if (
@@ -457,33 +362,29 @@ export default async function usage(pi: ExtensionAPI) {
     }
 
     try {
-      const loaded = await loadReport(usageProvider, access);
+      const loaded = await loadReport(access);
       if (!isCurrentRequest(ctx, key, requestGeneration)) return;
-      const selected = selectQuota(loaded.report, provider, ctx.model?.id ?? modelId);
+      const selected = selectQuota(loaded.report);
       if (selected.quotas?.length) {
-        const currentModelId = ctx.model?.id ?? modelId;
-        const currentKey = quotaKey(provider, currentModelId);
-        const current = cachedQuota(provider, currentModelId, loaded.accountKey);
+        const current = cachedQuota(loaded.accountKey);
         if (current) {
-          showQuotas(ctx, currentKey, current.quotas, loaded.accountKey, current.expiresAt);
+          showQuotas(ctx, key, current.quotas, loaded.accountKey, current.expiresAt);
           return;
         }
       }
       if (selected.entry?.error && isAuthenticationError(selected.entry.error.message)) {
-        showUnavailable(ctx, key, provider, loaded.accountKey);
+        showUnavailable(ctx, key, loaded.accountKey);
         return;
       }
-      const fallback = cachedQuota(provider, modelId, loaded.accountKey);
+      const fallback = cachedQuota(loaded.accountKey);
       if (fallback) showQuotas(ctx, key, fallback.quotas, loaded.accountKey, fallback.expiresAt);
-      else showUnavailable(ctx, key, provider, loaded.accountKey);
-    } catch (error) {
+      else showUnavailable(ctx, key, loaded.accountKey);
+    } catch {
       if (!isCurrentRequest(ctx, key, requestGeneration)) return;
-      const accountKey = error instanceof AccountChangedUsageError
-        ? error.accountKey
-        : access.accountKey;
-      const fallback = cachedQuota(provider, modelId, accountKey);
+      const accountKey = access.accountKey;
+      const fallback = cachedQuota(accountKey);
       if (fallback) showQuotas(ctx, key, fallback.quotas, accountKey, fallback.expiresAt);
-      else showUnavailable(ctx, key, provider, accountKey);
+      else showUnavailable(ctx, key, accountKey);
     }
   }
 
@@ -514,18 +415,12 @@ export default async function usage(pi: ExtensionAPI) {
       return;
     }
     if (!report) return;
-    void saveReport("codex", report, accountKey).catch(() => undefined);
-    const selected = selectQuota(report, "openai-codex", ctx.model.id);
+    void saveReport(report, accountKey).catch(() => undefined);
+    const selected = selectQuota(report);
     if (!selected.quotas?.length || activeCtx !== ctx) return;
-    const key = quotaKey("openai-codex", ctx.model.id);
-    const current = cachedQuota("openai-codex", ctx.model.id, accountKey);
+    const key = "openai-codex";
+    const current = cachedQuota(accountKey);
     if (current) showQuotas(ctx, key, current.quotas, accountKey, current.expiresAt);
-  });
-
-  pi.on("message_end", (event) => {
-    if (event.message.role !== "assistant" || event.message.provider !== "cursor") return;
-    const message = patchCursorMessageCost(event.message);
-    return message === event.message ? undefined : { message };
   });
 
   pi.on("session_start", (_event, ctx) => {
