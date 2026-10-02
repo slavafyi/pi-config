@@ -15,26 +15,5 @@
       },
       "tertiary": null
     }
-  },
-  {
-    "provider": "cursor",
-    "source": "web",
-    "usage": {
-      "primary": {
-        "usedPercent": 1,
-        "windowMinutes": 44640,
-        "resetsAt": "2026-08-20T14:00:00Z"
-      },
-      "secondary": {
-        "usedPercent": 20,
-        "windowMinutes": 44640,
-        "resetsAt": "2026-08-20T14:00:00Z"
-      },
-      "tertiary": {
-        "usedPercent": 55,
-        "windowMinutes": 44640,
-        "resetsAt": "2026-08-20T14:00:00Z"
-      }
-    }
   }
 ]

@@ -33,7 +33,7 @@ export function parseUsageCache(text: string): UsageCache {
   }
   const result: UsageCache = {};
   for (const [provider, cached] of Object.entries(root.reports)) {
-    if (!cached || typeof cached !== "object" || Array.isArray(cached)) continue;
+    if (provider !== "codex" || !cached || typeof cached !== "object" || Array.isArray(cached)) continue;
     const entry = cached as { report?: unknown; fetchedAt?: unknown; accountKey?: unknown };
     if (
       typeof entry.fetchedAt !== "number" ||
@@ -44,8 +44,11 @@ export function parseUsageCache(text: string): UsageCache {
       continue;
     }
     try {
+      const report = parseUsageReport(JSON.stringify(entry.report))
+        .filter((entry) => entry.provider === "codex");
+      if (!report.length) continue;
       result[provider] = {
-        report: parseUsageReport(JSON.stringify(entry.report)),
+        report,
         fetchedAt: entry.fetchedAt,
         accountKey: entry.accountKey,
       };
@@ -75,34 +78,16 @@ export function mergeUsageCaches(...values: UsageCache[]): UsageCache {
   return result;
 }
 
-function cursorResetAt(report: UsageReport): number | undefined {
-  const entry = report.find((candidate) => candidate.provider === "cursor");
-  if (!entry?.usage) return undefined;
-  const windows = [entry.usage.primary, entry.usage.secondary, entry.usage.tertiary]
-    .filter((window) => window !== null);
-  if (windows.length === 0) return undefined;
-  const resets = windows.map((window) => window?.resetsAt && Date.parse(window.resetsAt));
-  if (resets.some((reset) => typeof reset !== "number" || !Number.isFinite(reset))) {
-    return undefined;
-  }
-  return Math.min(...resets as number[]);
-}
-
 export function cachedUsageExpiresAt(
   cached: CachedUsageReport,
-  provider: string,
   maxStaleMs = MAX_STALE_MS,
 ): number | undefined {
   const staleAt = cached.fetchedAt + maxStaleMs;
-  if (Number.isNaN(staleAt)) return undefined;
-  if (provider !== "cursor") return staleAt;
-  const resetAt = cursorResetAt(cached.report);
-  return resetAt === undefined ? undefined : Math.min(staleAt, resetAt);
+  return Number.isNaN(staleAt) ? undefined : staleAt;
 }
 
 export function isCachedUsageUsable(
   cached: CachedUsageReport | undefined,
-  provider: string,
   accountKey: string,
   now = Date.now(),
   maxStaleMs = MAX_STALE_MS,
@@ -110,7 +95,7 @@ export function isCachedUsageUsable(
   if (!cached || cached.accountKey !== accountKey) return false;
   const age = now - cached.fetchedAt;
   if (!Number.isFinite(age) || age < 0) return false;
-  const expiresAt = cachedUsageExpiresAt(cached, provider, maxStaleMs);
+  const expiresAt = cachedUsageExpiresAt(cached, maxStaleMs);
   return expiresAt !== undefined && now < expiresAt;
 }
 

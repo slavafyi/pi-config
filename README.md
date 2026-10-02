@@ -87,7 +87,7 @@ delegation policy and reviewing its separate concurrency limits.
 | `tool-output-limit` | Independent configurable limits for built-in bash, grep, and text read output |
 | `footer` | Responsive project, model, extension-status, quota, cache, context, and cost footer |
 | `plan-mode` | Read-only planning with cache-preserving execution transitions |
-| `usage` | Codex and Cursor quota status and Cursor cost estimates |
+| `usage` | Codex quota status |
 | `subagent-policy` | Automatic delegation policy with foreground execution by default |
 
 Extension-specific settings are namespaced under `extensions` in
@@ -107,7 +107,6 @@ Packages are declared in `settings.json` and pinned to immutable git commits or 
 | [pi-datetime](https://github.com/yusukeshib/pi-datetime) | Date and time context |
 | [pi-sidequest](https://github.com/peterp/pi-sidequest) | Side-task execution |
 | [pi-subagents](https://github.com/tintinweb/pi-subagents) | Parallel subagent orchestration |
-| [pi-cursor-sdk](https://github.com/fitchmultz/pi-cursor-sdk) | Cursor SDK agents inside Pi |
 | [pi-voice](https://github.com/earendil-works/pi-voice) | Local speech-to-text dictation and file transcription |
 | [pi-context-view](https://github.com/dimk90/pi-context-view) | Context usage visualization and inspection of system prompt, tools, and extension injections |
 | [pi-copy-code](https://github.com/penumbral-labs/pi-copy-code) | Copy code blocks and blockquotes from recent assistant messages |

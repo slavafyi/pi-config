@@ -7,7 +7,6 @@ export interface UsageWindow {
 export interface UsageEntry {
   provider: string;
   source: string;
-  cursorModels?: string[];
   usage?: {
     primary: UsageWindow | null;
     secondary: UsageWindow | null;
@@ -27,33 +26,6 @@ export interface QuotaStatus {
   usedPercent: number;
   leftPercent: number;
   reset?: string;
-  pool?: string;
-}
-
-interface TokenRates {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-}
-
-interface NormalizedModel {
-  base: string;
-  fast: boolean;
-}
-
-interface CostedMessage {
-  role: "assistant";
-  provider: string;
-  model: string;
-  usage: {
-    input: number;
-    output: number;
-    cacheRead: number;
-    cacheWrite: number;
-    totalTokens: number;
-    cost: TokenRates & { total: number };
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -100,12 +72,6 @@ function readEntry(value: unknown): UsageEntry {
     provider: readString(value.provider, "entry.provider"),
     source: readString(value.source, "entry.source"),
   };
-  if (value.cursorModels !== undefined) {
-    if (!Array.isArray(value.cursorModels) || value.cursorModels.some((model) => typeof model !== "string")) {
-      throw new Error("invalid entry.cursorModels");
-    }
-    entry.cursorModels = value.cursorModels;
-  }
   if (value.usage !== undefined && value.usage !== null) {
     if (!isRecord(value.usage)) throw new Error("invalid entry.usage");
     entry.usage = {
@@ -230,48 +196,6 @@ export function parseCodexUsagePayload(text: string, now = new Date()): UsageRep
   return [{ provider: "codex", source: "oauth", usage }];
 }
 
-function cursorPercent(value: unknown, field: string): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  const number = readFiniteNumber(value, field);
-  if (number < 0) throw new Error(`invalid ${field}`);
-  return Math.min(100, number);
-}
-
-export function parseCursorUsagePayload(text: string): UsageReport {
-  const value: unknown = JSON.parse(text);
-  if (!isRecord(value) || !isRecord(value.planUsage)) {
-    throw new Error("invalid Cursor usage payload");
-  }
-  const start = readFiniteNumber(value.billingCycleStart, "billingCycleStart");
-  const end = readFiniteNumber(value.billingCycleEnd, "billingCycleEnd");
-  const startMs = start < 1_000_000_000_000 ? start * 1_000 : start;
-  const endMs = end < 1_000_000_000_000 ? end * 1_000 : end;
-  const windowMinutes = Math.ceil((endMs - startMs) / 60_000);
-  if (windowMinutes <= 0) throw new Error("invalid Cursor billing cycle");
-  const resetsAt = new Date(endMs).toISOString();
-  const window = (usedPercent: number | undefined): UsageWindow | null =>
-    usedPercent === undefined ? null : { usedPercent, windowMinutes, resetsAt };
-  const total = cursorPercent(value.planUsage.totalPercentUsed, "planUsage.totalPercentUsed");
-  const cursor = cursorPercent(value.planUsage.autoPercentUsed, "planUsage.autoPercentUsed");
-  const other = cursorPercent(value.planUsage.apiPercentUsed, "planUsage.apiPercentUsed");
-  if (total === undefined && cursor === undefined && other === undefined) {
-    throw new Error("Cursor usage payload has no percentages");
-  }
-  const cursorModels = Array.isArray(value.autoBucketModels)
-    ? value.autoBucketModels.filter((model): model is string => typeof model === "string")
-    : [];
-  return [{
-    provider: "cursor",
-    source: "cursor-agent",
-    ...(cursorModels.length ? { cursorModels } : {}),
-    usage: {
-      primary: window(total),
-      secondary: window(cursor),
-      tertiary: window(other),
-    },
-  }];
-}
-
 function headerNumber(
   headers: Record<string, string | undefined>,
   name: string,
@@ -336,14 +260,13 @@ function windowLabel(minutes: number): string {
   return `${minutes}m`;
 }
 
-function quota(value: UsageWindow, window: string, now: Date, pool?: string): QuotaStatus {
+function quota(value: UsageWindow, window: string, now: Date): QuotaStatus {
   const reset = formatReset(value.resetsAt, now);
   return {
     window,
     usedPercent: value.usedPercent,
     leftPercent: Math.max(0, Math.round(100 - value.usedPercent)),
     ...(reset ? { reset } : {}),
-    ...(pool ? { pool } : {}),
   };
 }
 
@@ -358,90 +281,14 @@ export function selectOpenAiQuota(entry: UsageEntry, now = new Date()): QuotaSta
   return value ? quota(value, windowLabel(value.windowMinutes), now) : undefined;
 }
 
-export function normalizeCursorModelId(modelId: string): NormalizedModel {
-  let base = modelId.toLowerCase().replace(/^cursor\//, "");
-  let fast = false;
-  if (base.endsWith(":fast")) {
-    fast = true;
-    base = base.slice(0, -5);
-  } else if (base.endsWith(":slow")) {
-    base = base.slice(0, -5);
-  } else if (base.endsWith("-fast")) {
-    fast = true;
-    base = base.slice(0, -5);
-  }
-  base = base.replace(/@[a-z0-9.]+$/i, "");
-  base = MODEL_ALIASES[base] ?? base;
-  return { base, fast };
-}
-
-export type CursorPool = "Cursor" | "Other" | "Total";
-
-export function preferredCursorPool(
-  modelId: string,
-  cursorModels?: readonly string[],
-): CursorPool {
-  const { base } = normalizeCursorModelId(modelId);
-  if (base === "auto" || base === "auto-smart" || base === "default") return "Total";
-  if (
-    base.startsWith("composer-") ||
-    base.startsWith("cursor-grok-") ||
-    base === "grok-4.5" ||
-    base === "grok-4.6"
-  ) {
-    return "Cursor";
-  }
-  if (cursorModels) {
-    const normalized = new Set(cursorModels.map((model) => normalizeCursorModelId(model).base));
-    return normalized.has(base) ? "Cursor" : "Other";
-  }
-  return "Other";
-}
-
-export function selectCursorQuota(
-  entry: UsageEntry,
-  modelId: string,
-  now = new Date(),
-): QuotaStatus | undefined {
-  const preferredPool = preferredCursorPool(modelId, entry.cursorModels);
-  const candidates: Array<[UsageWindow | null | undefined, string]> =
-    preferredPool === "Cursor"
-      ? [
-          [entry.usage?.secondary, "cursor"],
-          [entry.usage?.primary, "total"],
-          [entry.usage?.tertiary, "other"],
-        ]
-      : preferredPool === "Other"
-        ? [
-            [entry.usage?.tertiary, "other"],
-            [entry.usage?.primary, "total"],
-            [entry.usage?.secondary, "cursor"],
-          ]
-        : [
-            [entry.usage?.primary, "total"],
-            [entry.usage?.secondary, "cursor"],
-            [entry.usage?.tertiary, "other"],
-          ];
-  const selected = candidates.find(([value]) => value);
-  if (!selected?.[0]) return undefined;
-  return quota(selected[0], selected[1], now, selected[1]);
-}
-
 export function selectQuota(
   report: UsageReport,
-  provider: string,
-  modelId: string,
   now = new Date(),
 ): { entry?: UsageEntry; quota?: QuotaStatus; quotas?: QuotaStatus[] } {
-  const id = provider === "openai-codex" ? "codex" : provider;
-  const entry = report.find((candidate) => candidate.provider === id);
+  const entry = report.find((candidate) => candidate.provider === "codex");
   if (!entry || entry.error) return { entry };
-  if (provider === "openai-codex") {
-    const quotas = selectOpenAiQuotas(entry, now);
-    return { entry, quota: selectOpenAiQuota(entry, now), quotas };
-  }
-  const quota = provider === "cursor" ? selectCursorQuota(entry, modelId, now) : undefined;
-  return { entry, quota, ...(quota ? { quotas: [quota] } : {}) };
+  const quotas = selectOpenAiQuotas(entry, now);
+  return { entry, quota: selectOpenAiQuota(entry, now), quotas };
 }
 
 export type QuotaTone = "dim" | "accent" | "warning" | "error";
@@ -470,115 +317,4 @@ export function formatQuotaStatus(value: QuotaStatus): string {
 
 export function isAuthenticationError(message: string): boolean {
   return /auth|credential|login|sign[ -]?in|token|cookie|database not found/i.test(message);
-}
-
-const MODEL_ALIASES: Record<string, string> = {
-  fable: "claude-fable-5",
-  "fable-5": "claude-fable-5",
-  "opus-4.5": "claude-opus-4-5",
-  "opus-4.6": "claude-opus-4-6",
-  "opus-4.7": "claude-opus-4-7",
-  "opus-4.8": "claude-opus-4-8",
-  "opus-5": "claude-opus-5",
-  "sonnet-5": "claude-sonnet-5",
-  "composer-2-5": "composer-2.5",
-  "grok-4-5": "grok-4.5",
-  "grok-4-6": "grok-4.6",
-  "gpt-5-6-luna": "gpt-5.6-luna",
-  "gpt-5-6-sol": "gpt-5.6-sol",
-  "gpt-5-6-terra": "gpt-5.6-terra",
-};
-
-const STANDARD_RATES: Record<string, TokenRates> = {
-  "claude-fable-5": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 50 },
-  "claude-haiku-4-5": { input: 1, cacheWrite: 1.25, cacheRead: 0.1, output: 5 },
-  "claude-opus-4-5": { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
-  "claude-opus-4-6": { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
-  "claude-opus-4-7": { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
-  "claude-opus-4-8": { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
-  "claude-opus-5": { input: 5, cacheWrite: 6.25, cacheRead: 0.5, output: 25 },
-  "claude-sonnet-4": { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
-  "claude-sonnet-4-5": { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
-  "claude-sonnet-4-6": { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
-  "claude-sonnet-5": { input: 2, cacheWrite: 2.5, cacheRead: 0.2, output: 10 },
-  "composer-2.5": { input: 0.5, cacheWrite: 0, cacheRead: 0.2, output: 2.5 },
-  "gemini-2.5-flash": { input: 0.3, cacheWrite: 0, cacheRead: 0.03, output: 2.5 },
-  "gemini-3-flash": { input: 0.5, cacheWrite: 0, cacheRead: 0.05, output: 3 },
-  "gemini-3.1-pro": { input: 2, cacheWrite: 0.375, cacheRead: 0.2, output: 12 },
-  "gemini-3.5-flash": { input: 1.5, cacheWrite: 0.083333, cacheRead: 0.15, output: 9 },
-  "gemini-3.6-flash": { input: 1.5, cacheWrite: 0.083333, cacheRead: 0.15, output: 7.5 },
-  "gemini-3.7-flash": { input: 0.75, cacheWrite: 0, cacheRead: 0.075, output: 3.5 },
-  "glm-5.2": { input: 1.4, cacheWrite: 0, cacheRead: 0.26, output: 4.4 },
-  "gpt-5-mini": { input: 0.25, cacheWrite: 0, cacheRead: 0.025, output: 2 },
-  "gpt-5.1": { input: 1.25, cacheWrite: 0, cacheRead: 0.125, output: 10 },
-  "gpt-5.2": { input: 1.75, cacheWrite: 0, cacheRead: 0.175, output: 14 },
-  "gpt-5.3-codex": { input: 1.75, cacheWrite: 0, cacheRead: 0.175, output: 14 },
-  "gpt-5.4": { input: 2.5, cacheWrite: 0, cacheRead: 0.25, output: 15 },
-  "gpt-5.4-mini": { input: 0.75, cacheWrite: 0, cacheRead: 0.075, output: 4.5 },
-  "gpt-5.4-nano": { input: 0.2, cacheWrite: 0, cacheRead: 0.02, output: 1.25 },
-  "gpt-5.5": { input: 5, cacheWrite: 0, cacheRead: 0.5, output: 30 },
-  "gpt-5.6-luna": { input: 0.2, cacheWrite: 0.25, cacheRead: 0.02, output: 1.2 },
-  "gpt-5.6-sol": { input: 4, cacheWrite: 5, cacheRead: 0.4, output: 20 },
-  "gpt-5.6-terra": { input: 2, cacheWrite: 2.5, cacheRead: 0.2, output: 12 },
-  "grok-4.5": { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
-  "grok-4.6": { input: 2, cacheWrite: 0, cacheRead: 0.5, output: 6 },
-  "kimi-k2.7-code": { input: 0.95, cacheWrite: 0, cacheRead: 0.19, output: 4 },
-  "kimi-k3": { input: 3, cacheWrite: 0, cacheRead: 0.3, output: 15 },
-};
-
-const FAST_RATES: Record<string, TokenRates> = {
-  "claude-opus-4-7": { input: 30, cacheWrite: 37.5, cacheRead: 3, output: 150 },
-  "claude-opus-4-8": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 50 },
-  "claude-opus-5": { input: 10, cacheWrite: 12.5, cacheRead: 1, output: 50 },
-  "composer-2.5": { input: 3, cacheWrite: 0, cacheRead: 0.5, output: 15 },
-  "gpt-5.4": { input: 5, cacheWrite: 0, cacheRead: 0.5, output: 30 },
-  "gpt-5.5": { input: 12.5, cacheWrite: 0, cacheRead: 1.25, output: 75 },
-  "gpt-5.6-luna": { input: 0.4, cacheWrite: 0.5, cacheRead: 0.04, output: 2.4 },
-  "gpt-5.6-sol": { input: 8, cacheWrite: 10, cacheRead: 0.8, output: 40 },
-  "gpt-5.6-terra": { input: 4, cacheWrite: 5, cacheRead: 0.4, output: 24 },
-  "grok-4.5": { input: 4, cacheWrite: 0, cacheRead: 1, output: 18 },
-  "grok-4.6": { input: 4, cacheWrite: 0, cacheRead: 1, output: 12 },
-};
-
-const LONG_CONTEXT_RATES: Record<string, TokenRates> = {
-  "gpt-5.4": { input: 5, cacheWrite: 0, cacheRead: 0.5, output: 22.5 },
-  "gpt-5.5": { input: 10, cacheWrite: 0, cacheRead: 1, output: 45 },
-  "gpt-5.6-sol": { input: 8, cacheWrite: 10, cacheRead: 0.8, output: 30 },
-};
-
-export function estimateCursorCost(
-  modelId: string,
-  usage: Pick<CostedMessage["usage"], "input" | "output" | "cacheRead" | "cacheWrite">,
-): (TokenRates & { total: number }) | undefined {
-  const counts = [usage.input, usage.output, usage.cacheRead, usage.cacheWrite];
-  if (!counts.every((count) => Number.isFinite(count) && count >= 0)) return undefined;
-  const model = normalizeCursorModelId(modelId);
-  const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
-  const rates = model.fast
-    ? FAST_RATES[model.base]
-    : promptTokens > 272_000
-      ? (LONG_CONTEXT_RATES[model.base] ?? STANDARD_RATES[model.base])
-      : STANDARD_RATES[model.base];
-  if (!rates) return undefined;
-  const cost = {
-    input: (usage.input * rates.input) / 1_000_000,
-    output: (usage.output * rates.output) / 1_000_000,
-    cacheRead: (usage.cacheRead * rates.cacheRead) / 1_000_000,
-    cacheWrite: (usage.cacheWrite * rates.cacheWrite) / 1_000_000,
-  };
-  return { ...cost, total: cost.input + cost.output + cost.cacheRead + cost.cacheWrite };
-}
-
-export function patchCursorMessageCost<T extends CostedMessage>(message: T): T {
-  if (message.provider !== "cursor") return message;
-  const current = message.usage.cost;
-  if (
-    [current.input, current.output, current.cacheRead, current.cacheWrite, current.total].some(
-      (value) => value !== 0,
-    )
-  ) {
-    return message;
-  }
-  const cost = estimateCursorCost(message.model, message.usage);
-  return cost ? ({ ...message, usage: { ...message.usage, cost } } as T) : message;
 }

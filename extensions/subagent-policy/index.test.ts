@@ -73,28 +73,9 @@ assert.equal(secondContext.messages.at(-1).content, "Parent context remaining: 7
 assert.equal(firstContext.messages.at(-1).content, "Parent context remaining: 80,000/200,000 tokens.");
 assert.deepEqual(handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx), firstStart);
 
-// Cursor keeps the delegation policy, but receives no Pi context-usage snapshots.
-ctx.model.provider = "cursor";
-const cursorCtx = { ...ctx, getContextUsage: () => { throw new Error("Cursor must not read Pi usage"); } };
-assert.deepEqual(handlers.get("before_agent_start")?.({ systemPrompt: "base" }, cursorCtx), firstStart);
-assert.equal(handlers.get("context")?.({ messages: nextMessages }, cursorCtx), undefined);
-const oldSnapshot = {
-  role: "custom",
-  customType: "subagent-policy-context-usage",
-  content: "Parent context remaining at run start: 80,000/200,000 tokens.",
-  display: false,
-  timestamp: 0,
-};
-const otherCustom = { ...oldSnapshot, customType: "plan-mode-state", content: "Plan mode is active" };
-const savedMessages = [...stableMessages, oldSnapshot, otherCustom, ...toolTail];
-const cursorContext = handlers.get("context")?.({ messages: savedMessages }, cursorCtx);
-assert.deepEqual(cursorContext.messages, [...stableMessages, otherCustom, ...toolTail]);
-assert.equal(savedMessages.length, 5);
-assert.equal(savedMessages[1], oldSnapshot);
-assert.equal(handlers.get("context")?.({ messages: cursorContext.messages }, cursorCtx), undefined);
 contextUsage = { tokens: 140_000, contextWindow: 200_000, percent: 70 };
 
-for (const provider of ["openai-codex", "anthropic", "cursor"]) {
+for (const provider of ["openai-codex", "anthropic"]) {
   const withoutUsage = { model: { provider }, getContextUsage: () => undefined };
   assert.deepEqual(
     handlers.get("before_agent_start")?.({ systemPrompt: "base" }, withoutUsage),

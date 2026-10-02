@@ -10,8 +10,8 @@ import {
   writeUsageCache,
   type UsageCache,
 } from "./cache.ts";
-import { parseCodexUsagePayload, parseCursorUsagePayload } from "./core.ts";
-import { codexAccountFingerprint, cursorAccountFingerprint } from "./identity.ts";
+import { parseCodexUsagePayload } from "./core.ts";
+import { codexAccountFingerprint } from "./identity.ts";
 import usage from "./index.ts";
 
 const report = JSON.stringify({
@@ -36,22 +36,6 @@ const token = [
 const accountKey = codexAccountFingerprint("account");
 const normalizedReport = parseCodexUsagePayload(report);
 
-function cursorToken(subject: string, suffix: string): string {
-  return [
-    "header",
-    Buffer.from(JSON.stringify({ sub: subject, nonce: suffix })).toString("base64url"),
-    suffix,
-  ].join(".");
-}
-
-function cursorReport(apiPercentUsed = 30): string {
-  return JSON.stringify({
-    billingCycleStart: Date.now() - 86_400_000,
-    billingCycleEnd: Date.now() + 30 * 86_400_000,
-    planUsage: { totalPercentUsed: 10, autoPercentUsed: 20, apiPercentUsed },
-  });
-}
-
 async function flushPromises() {
   for (let index = 0; index < 500; index += 1) {
     await Promise.resolve();
@@ -70,7 +54,7 @@ async function waitFor(predicate: () => boolean) {
 async function setup(options: {
   cache?: UsageCache;
   agentDir?: string;
-  provider?: "openai-codex" | "cursor";
+  provider?: string;
   modelId?: string;
 } = {}) {
   const handlers = new Map<string, (event: any, ctx: any) => unknown>();
@@ -132,6 +116,7 @@ async function setup(options: {
   }
   return {
     ctx,
+    pi,
     handlers,
     eventHandlers,
     statuses,
@@ -372,47 +357,39 @@ test("binds response headers to the outgoing Codex account without blocking", as
   }
 });
 
-test("uses the retried Cursor account after credential rotation", async (t) => {
-  const agentDir = await mkdtemp(join(tmpdir(), "pi-usage-cursor-rotation-"));
-  const firstToken = cursorToken("account-a", "first");
-  const secondToken = cursorToken("account-b", "second");
-  const previousToken = process.env.CURSOR_AUTH_TOKEN;
-  process.env.CURSOR_AUTH_TOKEN = firstToken;
-  let requests = 0;
-  t.mock.method(globalThis, "fetch", async () => {
-    requests += 1;
-    if (requests === 1) {
-      process.env.CURSOR_AUTH_TOKEN = secondToken;
-      return new Response("", { status: 401 });
-    }
-    return new Response(cursorReport());
-  });
-  try {
-    const staleReport = parseCursorUsagePayload(cursorReport(40));
-    const state = await setup({
-      agentDir,
-      provider: "cursor",
-      modelId: "gpt-5.6-sol",
-      cache: {
-        cursor: {
-          report: staleReport,
-          fetchedAt: Date.now() - 10 * 60_000,
-          accountKey: cursorAccountFingerprint(firstToken),
-        },
-      },
-    });
-    state.handlers.get("session_start")?.({}, state.ctx);
-    await waitFor(() => state.statuses.at(-1)?.includes("light:accent:70%") === true);
-    await state.handlers.get("session_shutdown")?.({}, state.ctx);
-    assert.equal(
-      (await readUsageCache(join(agentDir, "usage-cache.json"))).cursor?.accountKey,
-      cursorAccountFingerprint(secondToken),
-    );
-  } finally {
-    if (previousToken === undefined) delete process.env.CURSOR_AUTH_TOKEN;
-    else process.env.CURSOR_AUTH_TOKEN = previousToken;
-    await rm(agentDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 10 });
-  }
+test("unsupported providers do not fetch or resolve auth and clear Codex status", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => new Response(report));
+  const state = await setup({ provider: "unsupported" });
+  const authMock = t.mock.method(state.ctx.modelRegistry, "getProviderAuth");
+  const execMock = t.mock.method(state.pi, "exec");
+  assert.equal(state.handlers.has("message_end"), false);
+
+  state.handlers.get("session_start")?.({}, state.ctx);
+  await flushPromises();
+  t.mock.timers.tick(500);
+  assert.equal(fetchMock.mock.callCount(), 0);
+  assert.equal(authMock.mock.callCount(), 0);
+  assert.equal(execMock.mock.callCount(), 0);
+  assert.equal(state.statuses.at(-1), undefined);
+
+  state.ctx.model.provider = "openai-codex";
+  state.handlers.get("model_select")?.({}, state.ctx);
+  await flushPromises();
+  assert.equal(state.statuses.at(-1), "light:dim:7d:light:accent:82%");
+  assert.equal(fetchMock.mock.callCount(), 1);
+  assert.equal(authMock.mock.callCount(), 1);
+
+  state.ctx.model.provider = "unsupported";
+  state.handlers.get("model_select")?.({}, state.ctx);
+  state.handlers.get("turn_end")?.({}, state.ctx);
+  await flushPromises();
+  t.mock.timers.tick(500);
+  assert.equal(state.statuses.at(-1), undefined);
+  assert.equal(fetchMock.mock.callCount(), 1);
+  assert.equal(authMock.mock.callCount(), 1);
+  assert.equal(execMock.mock.callCount(), 0);
+  await state.handlers.get("session_shutdown")?.({}, state.ctx);
 });
 
 test("invalidates a displayed quota when its stale deadline passes", async (t) => {

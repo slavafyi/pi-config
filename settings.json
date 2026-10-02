@@ -12,7 +12,6 @@
     "git:github.com/yusukeshib/pi-datetime@8ce467f64d4ff374535bdd8e46fa3b8de824ac87",
     "git:github.com/peterp/pi-sidequest@0d10f4481b2cf4b770266e869aca95d41d6f2ab8",
     "git:github.com/tintinweb/pi-subagents@e955e29c51b7a6cce37e1108cd2d6c57a77e151c",
-    "git:github.com/fitchmultz/pi-cursor-sdk@3e1d2e2083b27f50f7cbf76b220cb2408795d6ae",
     "npm:@earendil-works/pi-voice@0.1.0",
     "git:github.com/dimk90/pi-context-view@0eb5f9773c91b63b873da4d9ca6fa6caf795e91a",
     "git:github.com/penumbral-labs/pi-copy-code@2e35feac8f34dc7290c579fa981ac4e1125f69fd",
