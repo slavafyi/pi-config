@@ -5,11 +5,11 @@ import subagentPolicy, { formatContextUsage, SUBAGENT_POLICY_PROMPT } from "./in
 assert.equal(formatContextUsage(undefined), undefined);
 assert.equal(
   formatContextUsage({ tokens: 120_000, contextWindow: 200_000, percent: 60 }),
-  "Parent context remaining: 80,000/200,000 tokens.",
+  "Parent context remaining at run start: 80,000/200,000 tokens.",
 );
 assert.equal(
   formatContextUsage({ tokens: null, contextWindow: 200_000, percent: null }),
-  "Parent context: usage temporarily unknown after compaction; context window 200,000 tokens.",
+  "Parent context at run start: usage temporarily unknown after compaction; context window 200,000 tokens.",
 );
 
 assert.match(SUBAGENT_POLICY_PROMPT, /Calling Agent certifies that all three gates passed/);
@@ -45,35 +45,26 @@ const ctx = {
 
 subagentPolicy(pi as any);
 assert.deepEqual(commands, []);
-assert.deepEqual([...handlers.keys()].sort(), ["before_agent_start", "context"]);
+assert.deepEqual([...handlers.keys()], ["before_agent_start"]);
+assert.equal(handlers.has("context"), false, "tool continuations must not gain transient user messages");
 assert.equal(handlers.has("tool_call"), false);
 
 const firstStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-const secondStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
 assert.equal(firstStart.systemPrompt, `base\n\n${SUBAGENT_POLICY_PROMPT}`);
-assert.equal(secondStart.systemPrompt, firstStart.systemPrompt);
 assert.doesNotMatch(firstStart.systemPrompt, /Parent context remaining/);
-
-const stableMessages = [{ role: "user", content: "task", timestamp: 1 }];
-const firstContext = handlers.get("context")?.({ messages: stableMessages }, ctx);
-assert.equal(stableMessages.length, 1);
-assert.equal(firstContext.messages.length, 2);
-assert.equal(firstContext.messages[1].customType, "subagent-policy-context-usage");
-assert.equal(firstContext.messages[1].content, "Parent context remaining: 80,000/200,000 tokens.");
+assert.deepEqual(firstStart.message, {
+  customType: "subagent-policy-context-usage",
+  content: "Parent context remaining at run start: 80,000/200,000 tokens.",
+  display: false,
+});
 
 contextUsage = { tokens: 130_000, contextWindow: 200_000, percent: 65 };
-const newTail = [
-  { role: "assistant", content: "Calling a tool", timestamp: 2 },
-  { role: "toolResult", content: "A short result", timestamp: 3 },
-];
-const secondContext = handlers.get("context")?.({ messages: [...stableMessages, ...newTail] }, ctx);
-assert.deepEqual(secondContext.messages.slice(0, stableMessages.length), stableMessages);
-assert.deepEqual(secondContext.messages.slice(stableMessages.length, -1), newTail);
-assert.equal(secondContext.messages.at(-1).customType, "subagent-policy-context-usage");
-assert.equal(secondContext.messages.at(-1).content, "Parent context remaining: 70,000/200,000 tokens.");
-assert.deepEqual(
-  secondContext.messages
-    .slice(stableMessages.length)
-    .map((message: { role: string }) => message.role),
-  ["assistant", "toolResult", "custom"],
-);
+const secondStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
+assert.equal(secondStart.systemPrompt, firstStart.systemPrompt);
+assert.equal(secondStart.message.content, "Parent context remaining at run start: 70,000/200,000 tokens.");
+assert.equal(firstStart.message.content, "Parent context remaining at run start: 80,000/200,000 tokens.");
+
+const withoutUsage = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, {
+  getContextUsage: () => undefined,
+});
+assert.deepEqual(withoutUsage, { systemPrompt: firstStart.systemPrompt });

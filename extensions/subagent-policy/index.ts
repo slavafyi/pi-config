@@ -28,32 +28,25 @@ Parallel writers must use separate git worktrees. Worktree isolation is optional
 export function formatContextUsage(usage: ContextUsage | undefined): string | undefined {
   if (!usage) return undefined;
   if (usage.tokens === null) {
-    return `Parent context: usage temporarily unknown after compaction; context window ${usage.contextWindow.toLocaleString("en-US")} tokens.`;
+    return `Parent context at run start: usage temporarily unknown after compaction; context window ${usage.contextWindow.toLocaleString("en-US")} tokens.`;
   }
 
   const remaining = Math.max(0, usage.contextWindow - usage.tokens);
-  return `Parent context remaining: ${remaining.toLocaleString("en-US")}/${usage.contextWindow.toLocaleString("en-US")} tokens.`;
+  return `Parent context remaining at run start: ${remaining.toLocaleString("en-US")}/${usage.contextWindow.toLocaleString("en-US")} tokens.`;
 }
 
 export default function subagentPolicy(pi: ExtensionAPI) {
-  pi.on("before_agent_start", (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\n${SUBAGENT_POLICY_PROMPT}`,
-  }));
-
-  pi.on("context", (event, ctx) => {
+  pi.on("before_agent_start", (event, ctx) => {
+    const systemPrompt = `${event.systemPrompt}\n\n${SUBAGENT_POLICY_PROMPT}`;
     const usage = formatContextUsage(ctx.getContextUsage());
-    if (!usage) return;
+    if (!usage) return { systemPrompt };
     return {
-      messages: [
-        ...event.messages,
-        {
-          role: "custom",
-          customType: "subagent-policy-context-usage",
-          content: usage,
-          display: false,
-          timestamp: Date.now(),
-        },
-      ],
+      systemPrompt,
+      message: {
+        customType: "subagent-policy-context-usage",
+        content: usage,
+        display: false,
+      },
     };
   });
 }
