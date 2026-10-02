@@ -10,7 +10,7 @@ export const SUBAGENT_POLICY_PROMPT = `
 --- SUBAGENT POLICY ---
 Delegation is optional. Evaluate all three gates silently before every Agent call. Calling Agent certifies that all three gates passed. If any gate fails, continue locally without announcing the decision.
 
-Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish within its remaining context without a large or noisy investigation, or when isolated independent execution or review is needed. Use the latest parent-context snapshot; do not use a fixed percentage threshold.
+Gate 1 — Necessity and context economy: delegate only when the parent cannot reliably finish within its remaining context without a large or noisy investigation, or when isolated independent execution or review is needed. Use the latest parent-context snapshot when supplied; otherwise treat remaining capacity as unknown. Do not use a fixed percentage threshold.
 
 Gate 2 — Independent value: delegate a distinct investigation, challenge, implementation, or review. Do not duplicate parent or sibling work or seek reassurance by vote.
 
@@ -25,35 +25,28 @@ Any change after review invalidates the verdict. Re-review the final artifact or
 Parallel writers must use separate git worktrees. Worktree isolation is optional for read-only agents and a sole writer.
 --- END SUBAGENT POLICY ---`;
 
-export function formatContextUsage(usage: ContextUsage | undefined, atRunStart = false): string | undefined {
+export function formatContextUsage(usage: ContextUsage | undefined): string | undefined {
   if (!usage) return undefined;
-  const timing = atRunStart ? " at run start" : "";
   if (usage.tokens === null) {
-    return `Parent context${timing}: usage temporarily unknown after compaction; context window ${usage.contextWindow.toLocaleString("en-US")} tokens.`;
+    return `Parent context: usage temporarily unknown after compaction; context window ${usage.contextWindow.toLocaleString("en-US")} tokens.`;
   }
 
   const remaining = Math.max(0, usage.contextWindow - usage.tokens);
-  return `Parent context remaining${timing}: ${remaining.toLocaleString("en-US")}/${usage.contextWindow.toLocaleString("en-US")} tokens.`;
+  return `Parent context remaining: ${remaining.toLocaleString("en-US")}/${usage.contextWindow.toLocaleString("en-US")} tokens.`;
 }
 
 export default function subagentPolicy(pi: ExtensionAPI) {
-  pi.on("before_agent_start", (event, ctx) => {
-    const systemPrompt = `${event.systemPrompt}\n\n${SUBAGENT_POLICY_PROMPT}`;
-    if (ctx.model?.provider !== "cursor") return { systemPrompt };
-    const usage = formatContextUsage(ctx.getContextUsage(), true);
-    if (!usage) return { systemPrompt };
-    return {
-      systemPrompt,
-      message: {
-        customType: "subagent-policy-context-usage",
-        content: usage,
-        display: false,
-      },
-    };
-  });
+  pi.on("before_agent_start", (event) => ({
+    systemPrompt: `${event.systemPrompt}\n\n${SUBAGENT_POLICY_PROMPT}`,
+  }));
 
   pi.on("context", (event, ctx) => {
-    if (ctx.model?.provider === "cursor") return;
+    if (ctx.model?.provider === "cursor") {
+      const messages = event.messages.filter((message) =>
+        message.role !== "custom" || message.customType !== "subagent-policy-context-usage",
+      );
+      return messages.length === event.messages.length ? undefined : { messages };
+    }
     const usage = formatContextUsage(ctx.getContextUsage());
     if (!usage) return;
     return {

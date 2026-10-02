@@ -46,10 +46,12 @@ run. For providers other than Cursor, remaining context capacity is appended as 
 short temporary suffix through Pi's `context` event before each model request.
 It is not persisted in the session and does not rewrite the stable system prefix.
 
-Cursor temporarily keeps a hidden, persisted snapshot from `before_agent_start`.
-It describes usage at run start, not a live counter. Appending transient user-like
-messages after tool results can restart work in Cursor SDK instead of continuing
-its native replay. A live Cursor-specific mechanism remains a separate decision.
+Cursor receives no Pi context-usage snapshots. Old snapshots from resumed
+sessions are filtered out of requests to Cursor without deleting session entries.
+The delegation policy and subagent tools remain available, but the parent treats
+remaining capacity as unknown. Pi's context display is unchanged. Appending
+transient user-like messages after tool results can restart work in Cursor SDK
+instead of continuing its native replay.
 
 ## Roles
 

@@ -73,21 +73,26 @@ assert.equal(secondContext.messages.at(-1).content, "Parent context remaining: 7
 assert.equal(firstContext.messages.at(-1).content, "Parent context remaining: 80,000/200,000 tokens.");
 assert.deepEqual(handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx), firstStart);
 
-// Cursor keeps its existing run-start snapshot, never a transient continuation suffix.
+// Cursor keeps the delegation policy, but receives no Pi context-usage snapshots.
 ctx.model.provider = "cursor";
-const cursorStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-assert.equal(cursorStart.systemPrompt, firstStart.systemPrompt);
-assert.deepEqual(cursorStart.message, {
+const cursorCtx = { ...ctx, getContextUsage: () => { throw new Error("Cursor must not read Pi usage"); } };
+assert.deepEqual(handlers.get("before_agent_start")?.({ systemPrompt: "base" }, cursorCtx), firstStart);
+assert.equal(handlers.get("context")?.({ messages: nextMessages }, cursorCtx), undefined);
+const oldSnapshot = {
+  role: "custom",
   customType: "subagent-policy-context-usage",
-  content: "Parent context remaining at run start: 70,000/200,000 tokens.",
+  content: "Parent context remaining at run start: 80,000/200,000 tokens.",
   display: false,
-});
-assert.equal(handlers.get("context")?.({ messages: nextMessages }, ctx), undefined);
+  timestamp: 0,
+};
+const otherCustom = { ...oldSnapshot, customType: "plan-mode-state", content: "Plan mode is active" };
+const savedMessages = [...stableMessages, oldSnapshot, otherCustom, ...toolTail];
+const cursorContext = handlers.get("context")?.({ messages: savedMessages }, cursorCtx);
+assert.deepEqual(cursorContext.messages, [...stableMessages, otherCustom, ...toolTail]);
+assert.equal(savedMessages.length, 5);
+assert.equal(savedMessages[1], oldSnapshot);
+assert.equal(handlers.get("context")?.({ messages: cursorContext.messages }, cursorCtx), undefined);
 contextUsage = { tokens: 140_000, contextWindow: 200_000, percent: 70 };
-assert.equal(handlers.get("context")?.({ messages: nextMessages }, ctx), undefined);
-assert.equal(cursorStart.message.content, "Parent context remaining at run start: 70,000/200,000 tokens.");
-const nextCursorStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
-assert.equal(nextCursorStart.message.content, "Parent context remaining at run start: 60,000/200,000 tokens.");
 
 for (const provider of ["openai-codex", "anthropic", "cursor"]) {
   const withoutUsage = { model: { provider }, getContextUsage: () => undefined };
