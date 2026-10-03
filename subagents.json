@@ -2,6 +2,7 @@
   "maxConcurrent": 4,
   "defaultJoinMode": "smart",
   "backgroundByDefault": false,
+  "reportUsage": true,
   "schedulingEnabled": false,
   "workflowsEnabled": false,
   "maxSubagentDepth": 1,
