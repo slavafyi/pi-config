@@ -124,12 +124,6 @@ Packages are declared in `settings.json` and pinned to immutable git commits or 
 | [pi-copy-code](https://github.com/penumbral-labs/pi-copy-code) | Copy code blocks and blockquotes from recent assistant messages |
 | [pi-session-recall](https://www.npmjs.com/package/@ogulcancelik/pi-session-recall) | Search across previous sessions |
 
-The pi-subagents fork is pinned to an immutable commit. It keeps
-notifications local while the parent works and checks whether results were
-already retrieved before delivering them. It also guards notifications from
-superseded resume runs and busy-origin timers after abort/error. Our delegation
-settings are unchanged; this does not enable workflows or usage reporting.
-
 Pi packages run with full system access. Review third-party package source code
 before using this configuration.
 
