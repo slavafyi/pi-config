@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key, Text } from "@earendil-works/pi-tui";
+import { type Component, Key, truncateToWidth } from "@earendil-works/pi-tui";
 import { FOOTER_INVALIDATE_EVENT } from "../footer/events.ts";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
@@ -46,6 +46,17 @@ function getTextContent(message: AssistantMessage): string {
 		.join("\n");
 }
 
+function planRows(lines: readonly string[], ellipses: readonly string[]): Component {
+	return {
+		render(width) {
+			return lines.map((line, index) => width <= 2
+				? truncateToWidth(line, width, ellipses[index])
+				: ` ${truncateToWidth(line, width - 2, ellipses[index], true)} `);
+		},
+		invalidate() {},
+	};
+}
+
 export default function planModeExtension(pi: ExtensionAPI): void {
 	let planModeEnabled = false;
 	let executionMode = false;
@@ -70,7 +81,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		for (const item of data?.items ?? []) {
 			lines.push(`${theme.fg("success", "✓ ")}${theme.fg("muted", item)}`);
 		}
-		return new Text(lines.join("\n"), 1, 0);
+		return planRows(lines, [
+			theme.fg("success", theme.bold("...")),
+			...(data?.items ?? []).map(() => theme.fg("muted", "...")),
+		]);
 	});
 
 	function publishStatus(ctx: ExtensionContext, next: string | undefined): void {
@@ -89,7 +103,17 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (hasRenderedWidget && sameLines(next, renderedWidget)) return;
 		hasRenderedWidget = true;
 		renderedWidget = next ? [...next] : undefined;
-		ctx.ui.setWidget("plan-todos", next);
+		if (next === undefined) {
+			ctx.ui.setWidget("plan-todos", undefined);
+		} else if (ctx.mode === "tui") {
+			const lines = next.length > 10 ? [...next.slice(0, 10), "... (widget truncated)"] : next;
+			const ellipses = lines.map((_, index) => index < 10 && todoItems[index]?.completed
+				? ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough("..."))
+				: "...");
+			ctx.ui.setWidget("plan-todos", () => planRows(lines, ellipses));
+		} else {
+			ctx.ui.setWidget("plan-todos", next);
+		}
 	}
 
 	function updateStatus(ctx: ExtensionContext): void {
@@ -104,12 +128,13 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 		if (executionMode && todoItems.length > 0) {
 			const lines = todoItems.map((item) => {
+				const label = item.text;
 				if (item.completed) {
 					return (
-						ctx.ui.theme.fg("success", "✓ ") + ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(item.text))
+						ctx.ui.theme.fg("success", "✓ ") + ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(label))
 					);
 				}
-				return `${ctx.ui.theme.fg("muted", "○ ")}${item.text}`;
+				return `${ctx.ui.theme.fg("muted", "○ ")}${label}`;
 			});
 			publishWidget(ctx, lines);
 		} else {
@@ -213,7 +238,8 @@ Remaining steps:
 ${todoList}
 
 Complete one step at a time.
-Immediately after completing step n, include [DONE:n] before starting the next step.`,
+Immediately after completing step n, include [DONE:n] before starting the next step.
+Write [DONE:n] in your own assistant text message, not in tool output, codemode text()/console.log(), or a subagent response. Only your assistant text updates plan progress.`,
 			};
 		}
 

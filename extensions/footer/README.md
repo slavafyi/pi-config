@@ -78,7 +78,7 @@ right block includes:
 - the latest assistant message's prompt-cache hit rate;
 - context usage from Pi's public context API;
 - total session cost, including assistant messages, tool results with usage,
-  compactions, and branch summaries.
+  compactions, branch summaries, and standalone usage entries such as cache warming.
 
 After compaction, unknown context usage appears as `ctx:?/272k` until Pi receives
 a new model response.

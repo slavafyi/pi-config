@@ -262,7 +262,7 @@ export function calculateSessionStats(entries: readonly SessionEntryLike[]): {
         const prompt = usage.input + usage.cacheRead + usage.cacheWrite;
         cacheHitPercent = prompt > 0 ? (usage.cacheRead / prompt) * 100 : undefined;
       }
-    } else if ((entry.type === "compaction" || entry.type === "branch_summary") && validUsage(entry.usage)) {
+    } else if ((entry.type === "usage" || entry.type === "compaction" || entry.type === "branch_summary") && validUsage(entry.usage)) {
       usage = entry.usage;
     }
     const total = usage?.cost?.total;
