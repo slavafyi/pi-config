@@ -55,8 +55,11 @@ instructions in context.
 - Plan-mode restrictions are inactive; the normal active-tool configuration applies
 - Agent executes steps in order
 - `[DONE:n]` markers track completion
-- Widget shows progress with compact labels; saved steps, `/todos`, and execution context retain the full text
-- Completed plans render as TUI-only session entries with full text stored in their data
+- Widget shows one line per step, shortened to the current terminal width; saved steps, `/todos`, and execution context retain the full text
+- Completed plans use the same width-aware single-line labels, with full text stored in their data
+
+Resizing the terminal recalculates label widths without wrapping steps. The
+progress widget retains its ten-step display limit; `/todos` shows every step.
 
 Streaming progress is scanned incrementally with a short per-text-block tail so
 markers split across provider chunks are recognized without rescanning the full

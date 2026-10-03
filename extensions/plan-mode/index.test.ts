@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { visibleWidth } from "@earendil-works/pi-tui";
 
 import planMode, { MODE_GUARD_PROMPT } from "./index.ts";
 
@@ -13,6 +14,7 @@ function createHarness(initialEntries: any[] = [], activeBranch?: any[]) {
 	const entries = [...initialEntries];
 	const statuses: Array<string | undefined> = [];
 	const widgets: Array<string[] | undefined> = [];
+	let widgetComponent: { render(width: number): string[] } | undefined;
 	const pendingCustomMessages: any[] = [];
 	const notifications: string[] = [];
 	let themeName = "light";
@@ -56,6 +58,7 @@ function createHarness(initialEntries: any[] = [], activeBranch?: any[]) {
 		sendUserMessage: () => {},
 	};
 	const ctx = {
+		mode: "tui",
 		hasUI: true,
 		sessionManager: {
 			getEntries: () => entries,
@@ -65,7 +68,10 @@ function createHarness(initialEntries: any[] = [], activeBranch?: any[]) {
 		ui: {
 			notify: (text: string) => notifications.push(text),
 			setStatus: (_id: string, value: string | undefined) => statuses.push(value),
-			setWidget: (_id: string, value: string[] | undefined) => widgets.push(value),
+			setWidget: (_id: string, value: any) => {
+				widgetComponent = typeof value === "function" ? value({}, ctx.ui.theme) : undefined;
+				widgets.push(Array.isArray(value) ? value : widgetComponent?.render(80));
+			},
 			select: async () => "Execute the plan (track progress)",
 			editor: async () => undefined,
 			theme: {
@@ -121,6 +127,7 @@ function createHarness(initialEntries: any[] = [], activeBranch?: any[]) {
 		updateMessage,
 		widgets,
 		notifications,
+		renderWidget: (width: number) => widgetComponent?.render(width),
 		setThemeName: (name: string) => {
 			themeName = name;
 		},
@@ -352,6 +359,68 @@ test("keeps full plan instructions in persistence, execution, resume, and comple
 	const completion = restored.entries.filter((entry) => entry.customType === "plan-complete");
 	assert.equal(completion.length, 1);
 	assert.deepEqual(completion[0].data.items, [fullStep]);
+});
+
+test("renders one row per step at the current terminal width without shortening saved text", async () => {
+	const step = `Проверить Unicode и конец инструкции: ${"界😀".repeat(30)} конец`;
+	const harness = createHarness();
+	harness.ctx.ui.theme.fg = (_tone, text) => `\x1b[36m${text}\x1b[0m`;
+	harness.ctx.ui.theme.strikethrough = (text) => `\x1b[9m${text}\x1b[0m`;
+	await harness.handlers.get("session_start")?.({}, harness.ctx);
+	await harness.commands.get("plan")?.("", harness.ctx);
+	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n1. ${step}` }] }] });
+	for (const width of [0, 1, 2, 5, 40, 80, 240]) {
+		const lines = harness.renderWidget(width)!;
+		assert.equal(lines.length, 1);
+		assert.ok(visibleWidth(lines[0]) <= width);
+	}
+	assert.ok(harness.renderWidget(240)?.[0]?.includes(step));
+	assert.ok(!harness.renderWidget(80)?.[0]?.includes(step));
+	assert.ok(harness.renderWidget(240)?.[0]?.includes(step), "resize must not retain a previously truncated label");
+
+	const done = { role: "assistant", content: [{ type: "text", text: "[DONE:1]" }] };
+	await harness.endMessage({ message: done });
+	assert.ok(harness.renderWidget(240)?.[0]?.includes("\x1b[9m"));
+	harness.ctx.ui.theme.fg = (_tone, text) => `\x1b[33m${text}\x1b[0m`;
+	harness.eventHandlers.get("footer:invalidate")?.(undefined);
+	assert.ok(harness.renderWidget(240)?.[0]?.includes("\x1b[33m"));
+	await harness.endTurn({ message: done });
+	await harness.endAgent({ messages: [done] });
+	const completion = harness.entries.find((entry) => entry.customType === "plan-complete");
+	assert.deepEqual(completion.data.items, [step]);
+	const component = harness.entryRenderers.get("plan-complete")!(completion, {}, {
+		bold: (text: string) => text,
+		fg: (_tone: string, text: string) => `\x1b[33m${text}\x1b[0m`,
+	});
+	for (const width of [0, 1, 2, 5, 40, 80, 240]) {
+		const lines = component.render(width);
+		assert.equal(lines.length, 2);
+		assert.ok(lines.every((line: string) => visibleWidth(line) <= width));
+	}
+	assert.ok(component.render(240)[1].includes(step));
+	assert.ok(!component.render(80)[1].includes(step));
+});
+
+test("keeps the existing ten-step widget limit", async () => {
+	const harness = createHarness();
+	await harness.commands.get("plan")?.("", harness.ctx);
+	const steps = Array.from({ length: 12 }, (_, i) => `${i + 1}. Проверить шаг ${i + 1}`).join("\n");
+	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n${steps}` }] }] });
+	const lines = harness.renderWidget(120)!;
+	assert.equal(lines.length, 11);
+	assert.ok(lines.at(-1)?.includes("widget truncated"));
+	const state = harness.entries.filter((entry) => entry.customType === "plan-mode").at(-1);
+	assert.equal(state.data.todos.length, 12);
+});
+
+test("keeps string widgets for RPC clients without terminal components", async () => {
+	const harness = createHarness();
+	harness.ctx.mode = "rpc";
+	await harness.commands.get("plan")?.("", harness.ctx);
+	const step = "Проверить длинный шаг плана и сохранить его полный текст для отображения клиентом RPC";
+	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n1. ${step}` }] }] });
+	assert.equal(harness.renderWidget(80), undefined);
+	assert.ok(harness.widgets.at(-1)?.[0]?.includes(step));
 });
 
 test("restores plan state only from the active branch", async () => {

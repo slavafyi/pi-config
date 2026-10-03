@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { type Component, Key, truncateToWidth } from "@earendil-works/pi-tui";
 import { FOOTER_INVALIDATE_EVENT } from "../footer/events.ts";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
@@ -46,6 +46,17 @@ function getTextContent(message: AssistantMessage): string {
 		.join("\n");
 }
 
+function planRows(lines: readonly string[]): Component {
+	return {
+		render(width) {
+			return lines.map((line) => width <= 2
+				? truncateToWidth(line, width)
+				: ` ${truncateToWidth(line, width - 2, "...", true)} `);
+		},
+		invalidate() {},
+	};
+}
+
 export default function planModeExtension(pi: ExtensionAPI): void {
 	let planModeEnabled = false;
 	let executionMode = false;
@@ -68,9 +79,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		const data = entry.data as PlanCompleteData | undefined;
 		const lines = [theme.fg("success", theme.bold("✓ Plan Complete"))];
 		for (const item of data?.items ?? []) {
-			lines.push(`${theme.fg("success", "✓ ")}${theme.fg("muted", truncateToWidth(item, 50, "..."))}`);
+			lines.push(`${theme.fg("success", "✓ ")}${theme.fg("muted", item)}`);
 		}
-		return new Text(lines.join("\n"), 1, 0);
+		return planRows(lines);
 	});
 
 	function publishStatus(ctx: ExtensionContext, next: string | undefined): void {
@@ -89,7 +100,14 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (hasRenderedWidget && sameLines(next, renderedWidget)) return;
 		hasRenderedWidget = true;
 		renderedWidget = next ? [...next] : undefined;
-		ctx.ui.setWidget("plan-todos", next);
+		if (next === undefined) {
+			ctx.ui.setWidget("plan-todos", undefined);
+		} else if (ctx.mode === "tui") {
+			const lines = next.length > 10 ? [...next.slice(0, 10), "... (widget truncated)"] : next;
+			ctx.ui.setWidget("plan-todos", () => planRows(lines));
+		} else {
+			ctx.ui.setWidget("plan-todos", next);
+		}
 	}
 
 	function updateStatus(ctx: ExtensionContext): void {
@@ -104,7 +122,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 		if (executionMode && todoItems.length > 0) {
 			const lines = todoItems.map((item) => {
-				const label = truncateToWidth(item.text, 50, "...");
+				const label = item.text;
 				if (item.completed) {
 					return (
 						ctx.ui.theme.fg("success", "✓ ") + ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(label))
