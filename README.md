@@ -80,11 +80,23 @@ one, and Pi's default agents are disabled in favor of these definitions.
 `SubagentWorkflow` is explicitly disabled; enabling it requires extending our
 delegation policy and reviewing its separate concurrency limits.
 
+## Codemode
+
+Codemode is enabled alongside direct tools (`defaultTools: ["+codemode"]`,
+`codemode.mode: "on"`). No MCP server is required or configured. Scripts can
+batch tool calls and filter their results before returning output to the model.
+
+Our `tool-output-limit` extension limits direct calls only. Nested calls keep
+Pi's native tool limits, and the final script output uses codemode's native
+output budget. See [Tool Output Limit](extensions/tool-output-limit/README.md#codemode).
+
+Run `/reload` in existing sessions to enable codemode.
+
 ## Extensions
 
 | Extension | What it provides |
 |-----------|------------------|
-| `tool-output-limit` | Independent configurable limits for built-in bash, grep, and text read output |
+| `tool-output-limit` | Independent configurable limits for direct bash, grep, and text read output; nested calls bypass these limits |
 | `footer` | Responsive project, model, extension-status, quota, cache, context, and cost footer |
 | `plan-mode` | Read-only planning with cache-preserving execution transitions |
 | `usage` | Codex quota status |

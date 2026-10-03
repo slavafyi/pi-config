@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { ExtensionRunner, SessionManager, type BashToolDetails } from "@earendil-works/pi-coding-agent";
 
 import toolOutputLimit from "./index.ts";
 
@@ -16,6 +17,18 @@ function createPi() {
       },
     },
   };
+}
+
+function createRunner(handlers: ReturnType<typeof createPi>["handlers"]): ExtensionRunner {
+  return new ExtensionRunner(
+    [{ path: "tool-output-limit", handlers: new Map(
+      Array.from(handlers, ([name, handler]) => [name, [handler]]),
+    ) } as any],
+    {} as any,
+    process.cwd(),
+    SessionManager.inMemory(),
+    {} as any,
+  );
 }
 
 function writeSettings(directory: string, config: Record<string, number>): void {
@@ -159,6 +172,83 @@ test("applies independent limits to bash, grep, and read", async () => {
     });
     assert.ok(readResult);
     assert.ok(readResult.content[0].text.includes("offset="));
+  } finally {
+    if (fullOutputPath) rmSync(fullOutputPath, { force: true });
+    if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("preserves nested tool results through Pi's result pipeline", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pi-tool-output-test-"));
+  const previous = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = directory;
+  writeSettings(directory, { bash: 10, grep: 10, read: 10 });
+  const temporaryOutputs: string[] = [];
+
+  try {
+    const { handlers, pi } = createPi();
+    toolOutputLimit(pi as any);
+    handlers.get("session_start")?.({});
+    const runner = createRunner(handlers);
+    const output = "x\n".repeat(15 * 1024);
+    for (const toolName of ["bash", "grep", "read"]) {
+      const patch = await runner.emitToolResult({
+        type: "tool_result",
+        toolCallId: "codemode/1",
+        parentToolCallId: "codemode",
+        toolName,
+        input: { path: "/tmp/example.txt", command: "example" },
+        content: [{ type: "text", text: output }],
+        structuredContent: { output },
+        details: {},
+        isError: false,
+      } as any);
+      const path = (patch?.details as BashToolDetails | undefined)?.fullOutputPath;
+      if (path) temporaryOutputs.push(path);
+      assert.equal(patch, undefined, `${toolName} must reach its caller unchanged`);
+    }
+  } finally {
+    for (const path of temporaryOutputs) rmSync(path, { force: true });
+    if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("limits direct bash text without losing its structured result in Pi", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pi-tool-output-test-"));
+  const previous = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = directory;
+  writeSettings(directory, { bash: 10 });
+  let fullOutputPath: string | undefined;
+
+  try {
+    const { handlers, pi } = createPi();
+    toolOutputLimit(pi as any);
+    handlers.get("session_start")?.({});
+    const runner = createRunner(handlers);
+    const output = "x\n".repeat(15 * 1024);
+    const structuredContent = {
+      output, truncated: false, exit_code: 0, wall_time_seconds: 0.1,
+    };
+    const patch = await runner.emitToolResult({
+      type: "tool_result",
+      toolCallId: "direct-bash",
+      toolName: "bash",
+      input: { command: "example" },
+      content: [{ type: "text", text: output }],
+      structuredContent,
+      details: {},
+      isError: false,
+    } as any);
+    fullOutputPath = (patch?.details as BashToolDetails | undefined)?.fullOutputPath;
+    assert.ok(patch);
+    const text = patch.content?.[0];
+    assert.ok(text?.type === "text" && text.text.length < output.length);
+    assert.deepEqual(patch.structuredContent, structuredContent);
+    assert.equal(patch.isError, false);
   } finally {
     if (fullOutputPath) rmSync(fullOutputPath, { force: true });
     if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
