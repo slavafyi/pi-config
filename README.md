@@ -118,7 +118,7 @@ Packages are declared in `settings.json` and pinned to immutable git commits or 
 | [pi-auto-session-titles](https://github.com/edxeth/pi-auto-session-titles) | Automatic session titles |
 | [pi-datetime](https://github.com/yusukeshib/pi-datetime) | Date and time context |
 | [pi-sidequest](https://github.com/peterp/pi-sidequest) | Side-task execution |
-| [pi-subagents](https://github.com/tintinweb/pi-subagents) | Parallel subagent orchestration |
+| [pi-subagents](https://github.com/ronind/pi-subagents) | Parallel subagent orchestration; our fork ports [upstream #353](https://github.com/tintinweb/pi-subagents/pull/353) to suppress stale completion notifications and supports Pi 1.0 |
 | [pi-voice](https://github.com/earendil-works/pi-voice) | Local speech-to-text dictation and file transcription |
 | [pi-context-view](https://github.com/dimk90/pi-context-view) | Context usage visualization and inspection of system prompt, tools, and extension injections |
 | [pi-copy-code](https://github.com/penumbral-labs/pi-copy-code) | Copy code blocks and blockquotes from recent assistant messages |
