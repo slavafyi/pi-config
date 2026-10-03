@@ -6,7 +6,7 @@ Read-only exploration mode for safe code analysis.
 
 - **Built-in write tools blocked**: Blocks edit/write while preserving the provider tool prefix
 - **Bash allowlist**: Only read-only bash commands are allowed
-- **Plan extraction**: Extracts numbered steps from `Plan:` sections without shortening their instructions
+- **Plan extraction**: Extracts numbered steps from `Plan:` sections, including indented substeps and continuation lines, without shortening their instructions
 - **Progress tracking**: Widget shows completion status during execution
 - **[DONE:n] markers**: Explicit step completion tracking
 - **Session persistence**: State survives session resume
@@ -60,6 +60,8 @@ instructions in context.
 
 Resizing the terminal recalculates label widths without wrapping steps. The
 progress widget retains its ten-step display limit; `/todos` shows every step.
+Truncation ellipses retain the label's color and completed-step strikethrough.
+Indented substeps remain part of their parent step, not separate progress items.
 
 Streaming progress is scanned incrementally with a short per-text-block tail so
 markers split across provider chunks are recognized without rescanning the full

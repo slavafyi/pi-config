@@ -46,12 +46,12 @@ function getTextContent(message: AssistantMessage): string {
 		.join("\n");
 }
 
-function planRows(lines: readonly string[]): Component {
+function planRows(lines: readonly string[], ellipses: readonly string[]): Component {
 	return {
 		render(width) {
-			return lines.map((line) => width <= 2
-				? truncateToWidth(line, width)
-				: ` ${truncateToWidth(line, width - 2, "...", true)} `);
+			return lines.map((line, index) => width <= 2
+				? truncateToWidth(line, width, ellipses[index])
+				: ` ${truncateToWidth(line, width - 2, ellipses[index], true)} `);
 		},
 		invalidate() {},
 	};
@@ -81,7 +81,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		for (const item of data?.items ?? []) {
 			lines.push(`${theme.fg("success", "✓ ")}${theme.fg("muted", item)}`);
 		}
-		return planRows(lines);
+		return planRows(lines, [
+			theme.fg("success", theme.bold("...")),
+			...(data?.items ?? []).map(() => theme.fg("muted", "...")),
+		]);
 	});
 
 	function publishStatus(ctx: ExtensionContext, next: string | undefined): void {
@@ -104,7 +107,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			ctx.ui.setWidget("plan-todos", undefined);
 		} else if (ctx.mode === "tui") {
 			const lines = next.length > 10 ? [...next.slice(0, 10), "... (widget truncated)"] : next;
-			ctx.ui.setWidget("plan-todos", () => planRows(lines));
+			const ellipses = lines.map((_, index) => index < 10 && todoItems[index]?.completed
+				? ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough("..."))
+				: "...");
+			ctx.ui.setWidget("plan-todos", () => planRows(lines, ellipses));
 		} else {
 			ctx.ui.setWidget("plan-todos", next);
 		}

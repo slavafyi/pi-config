@@ -114,20 +114,35 @@ export function extractTodoItems(message: string): TodoItem[] {
 	if (!headerMatch) return items;
 
 	const planSection = message.slice(message.indexOf(headerMatch[0]) + headerMatch[0].length);
-	const numberedPattern = /^\s*(\d+)[.)]\s+\*{0,2}([^*\n]+)/gm;
+	let planIndent: number | undefined;
+	let stepLines: string[] = [];
 
-	for (const match of planSection.matchAll(numberedPattern)) {
-		const text = match[2]
-			.trim()
-			.replace(/\*{1,2}$/, "")
-			.trim();
+	function appendStep(): void {
+		const text = stepLines.join("\n").trim();
 		if (text.length > 5 && !text.startsWith("`") && !text.startsWith("/") && !text.startsWith("-")) {
 			const cleaned = cleanStepText(text);
-			if (cleaned.length > 3) {
-				items.push({ step: items.length + 1, text: cleaned, completed: false });
-			}
+			if (cleaned.length > 3) items.push({ step: items.length + 1, text: cleaned, completed: false });
 		}
 	}
+
+	for (const line of planSection.split("\n")) {
+		if (!line.trim()) continue;
+		const match = line.match(/^([ \t]*)(\d+)[.)][ \t]+(.+)$/);
+		const indent = (line.match(/^[ \t]*/)?.[0] ?? "").replace(/\t/g, "    ").length;
+		if (planIndent === undefined) {
+			if (!match) break;
+			planIndent = indent;
+		}
+		if (match && indent === planIndent) {
+			appendStep();
+			stepLines = [match[3]];
+		} else if (indent > planIndent && stepLines.length > 0) {
+			stepLines.push(line.trim());
+		} else {
+			break;
+		}
+	}
+	appendStep();
 	return items;
 }
 

@@ -337,10 +337,11 @@ test("publishes only plan state transitions while preserving progress UI", async
 });
 
 test("keeps full plan instructions in persistence, execution, resume, and completion", async () => {
-	const fullStep = "Run проверку длинного плана с сохранением всех условий и обязательно проверь заключительный результат";
+	const title = "Run проверку длинного плана с сохранением всех условий и обязательно проверь заключительный результат";
+	const fullStep = `${title} - Фоновый: проверить дату. - Переднего плана: проверить Git.`;
 	const harness = createHarness();
 	await harness.commands.get("plan")?.("", harness.ctx);
-	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n1. ${fullStep}` }] }] });
+	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n1. ${title}\n   - Фоновый: проверить дату.\n   - Переднего плана: проверить Git.` }] }] });
 	const state = harness.entries.filter((entry) => entry.customType === "plan-mode").at(-1);
 	assert.equal(state.data.todos[0].text, fullStep);
 	assert.ok(harness.sentMessages.at(-1)?.message.content.includes(fullStep));
@@ -399,6 +400,29 @@ test("renders one row per step at the current terminal width without shortening 
 	}
 	assert.ok(component.render(240)[1].includes(step));
 	assert.ok(!component.render(80)[1].includes(step));
+});
+
+test("keeps muted and strikethrough styles on truncation ellipses", async () => {
+	const step = "Проверить длинный шаг и все обязательные условия перед завершением плана";
+	const harness = createHarness([{ type: "custom", customType: "plan-mode", data: {
+		enabled: false, executing: true, todos: [{ step: 1, text: step, completed: true }],
+	} }]);
+	const theme = {
+		fg: (tone: string, text: string) => `\x1b[${tone === "muted" ? 33 : 32}m${text}\x1b[0m`,
+		bold: (text: string) => `\x1b[1m${text}\x1b[0m`,
+		strikethrough: (text: string) => `\x1b[9m${text}\x1b[0m`,
+	};
+	harness.ctx.ui.theme.fg = theme.fg;
+	harness.ctx.ui.theme.strikethrough = theme.strikethrough;
+	await harness.handlers.get("session_start")?.({}, harness.ctx);
+	assert.ok(harness.renderWidget(30)?.[0]?.includes(theme.fg("muted", theme.strikethrough("..."))));
+	const component = harness.entryRenderers.get("plan-complete")!({ data: { items: [step] } }, {}, theme);
+	assert.ok(component.render(30)[1].includes(theme.fg("muted", "...")));
+	assert.ok(component.render(10)[0].includes(theme.fg("success", theme.bold("..."))));
+	for (const width of [0, 1, 2, 3, 10, 30, 120]) {
+		assert.ok(component.render(width).every((line: string) => visibleWidth(line) <= width));
+		assert.ok(harness.renderWidget(width)?.every(line => visibleWidth(line) <= width));
+	}
 });
 
 test("keeps the existing ten-step widget limit", async () => {
