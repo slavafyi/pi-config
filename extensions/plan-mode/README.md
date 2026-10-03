@@ -33,7 +33,7 @@ Plan:
 ```
 
 4. Choose "Execute the plan" when prompted
-5. During execution, the agent marks steps complete with `[DONE:n]` tags
+5. During execution, the main agent marks steps complete with `[DONE:n]` tags in its own text messages, not in tool output or subagent responses
 6. Progress widget shows completion status
 
 ## How It Works

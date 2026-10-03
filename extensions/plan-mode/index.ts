@@ -214,7 +214,8 @@ Remaining steps:
 ${todoList}
 
 Complete one step at a time.
-Immediately after completing step n, include [DONE:n] before starting the next step.`,
+Immediately after completing step n, include [DONE:n] before starting the next step.
+Write [DONE:n] in your own assistant text message, not in tool output, codemode text()/console.log(), or a subagent response. Only your assistant text updates plan progress.`,
 			};
 		}
 

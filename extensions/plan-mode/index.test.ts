@@ -193,6 +193,8 @@ test("publishes only plan state transitions while preserving progress UI", async
 	assert.equal(sentMessages[0].message.customType, "plan-mode-execute");
 	assert.match(sentMessages[0].message.content, /^\[EXECUTING PLAN\]/);
 	assert.match(sentMessages[0].message.content, /Immediately after completing step n/);
+	assert.match(sentMessages[0].message.content, /Write \[DONE:n\] in your own assistant text message/);
+	assert.match(sentMessages[0].message.content, /not in tool output, codemode text\(\)\/console\.log\(\), or a subagent response/);
 	assert.doesNotMatch(sentMessages[0].message.content, /Full tool access/);
 	assert.deepEqual(sentMessages[0].options, { triggerTurn: true, deliverAs: "followUp" });
 	assert.equal((await startAgent()).message, undefined);
@@ -200,6 +202,9 @@ test("publishes only plan state transitions while preserving progress UI", async
 	assert.equal(handlers.has("context"), false);
 	assert.equal(statuses.at(-1), "dark:accent:● 0/2");
 	assert.ok(widgets.at(-1)?.every((line) => line.includes("dark:muted:○ ")));
+
+	await endMessage({ message: { role: "toolResult", toolName: "codemode", content: [{ type: "text", text: "[DONE:1]" }] } });
+	assert.equal(statuses.at(-1), "dark:accent:● 0/2");
 
 	const firstDoneMessage = {
 		role: "assistant",
