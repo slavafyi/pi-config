@@ -1,12 +1,14 @@
 {
-  "lastChangelogVersion": "1.0.0",
+  "lastChangelogVersion": "1.0.1",
   "defaultThinkingLevel": "medium",
-  "defaultTools": ["+codemode"],
+  "defaultTools": [
+    "+codemode"
+  ],
   "codemode": {
     "mode": "on"
   },
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6-astra",
+  "defaultModel": "gpt-6.1-sol",
   "editorPaddingX": 1,
   "packages": [
     "git:github.com/ttttmr/pi-wakatime@c5e82040aea0a78aba176dc6646d5eedb0f22888",

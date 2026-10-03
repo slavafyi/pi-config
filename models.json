@@ -7,6 +7,9 @@
         },
         "gpt-6-astra": {
           "contextWindow": 372000
+        },
+        "gpt-6.1-sol": {
+          "contextWindow": 372000
         }
       }
     }
