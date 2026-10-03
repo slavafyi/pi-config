@@ -337,17 +337,17 @@ test("publishes only plan state transitions while preserving progress UI", async
 });
 
 test("keeps full plan instructions in persistence, execution, resume, and completion", async () => {
-	const title = "Run проверку длинного плана с сохранением всех условий и обязательно проверь заключительный результат";
-	const fullStep = `${title} - Фоновый: проверить дату. - Переднего плана: проверить Git.`;
+	const title = "Run the long plan check, preserve every condition, and verify the final result";
+	const fullStep = `${title} - Background: check the date. - Foreground: check Git.`;
 	const harness = createHarness();
 	await harness.commands.get("plan")?.("", harness.ctx);
-	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n1. ${title}\n   - Фоновый: проверить дату.\n   - Переднего плана: проверить Git.` }] }] });
+	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n1. ${title}\n   - Background: check the date.\n   - Foreground: check Git.` }] }] });
 	const state = harness.entries.filter((entry) => entry.customType === "plan-mode").at(-1);
 	assert.equal(state.data.todos[0].text, fullStep);
 	assert.ok(harness.sentMessages.at(-1)?.message.content.includes(fullStep));
 	await harness.commands.get("todos")?.("", harness.ctx);
 	assert.ok(harness.notifications.at(-1)?.includes(fullStep));
-	assert.ok(!harness.widgets.at(-1)?.[0]?.includes("заключительный результат"));
+	assert.ok(!harness.widgets.at(-1)?.[0]?.includes("final result"));
 
 	const restored = createHarness(harness.entries);
 	await restored.handlers.get("session_start")?.({}, restored.ctx);
@@ -363,7 +363,7 @@ test("keeps full plan instructions in persistence, execution, resume, and comple
 });
 
 test("renders one row per step at the current terminal width without shortening saved text", async () => {
-	const step = `Проверить Unicode и конец инструкции: ${"界😀".repeat(30)} конец`;
+	const step = `Check Unicode and the full instruction: ${"界😀".repeat(30)} end`;
 	const harness = createHarness();
 	harness.ctx.ui.theme.fg = (_tone, text) => `\x1b[36m${text}\x1b[0m`;
 	harness.ctx.ui.theme.strikethrough = (text) => `\x1b[9m${text}\x1b[0m`;
@@ -403,7 +403,7 @@ test("renders one row per step at the current terminal width without shortening 
 });
 
 test("keeps muted and strikethrough styles on truncation ellipses", async () => {
-	const step = "Проверить длинный шаг и все обязательные условия перед завершением плана";
+	const step = "Check the long step and all mandatory conditions before completing the plan";
 	const harness = createHarness([{ type: "custom", customType: "plan-mode", data: {
 		enabled: false, executing: true, todos: [{ step: 1, text: step, completed: true }],
 	} }]);
@@ -428,7 +428,7 @@ test("keeps muted and strikethrough styles on truncation ellipses", async () => 
 test("keeps the existing ten-step widget limit", async () => {
 	const harness = createHarness();
 	await harness.commands.get("plan")?.("", harness.ctx);
-	const steps = Array.from({ length: 12 }, (_, i) => `${i + 1}. Проверить шаг ${i + 1}`).join("\n");
+	const steps = Array.from({ length: 12 }, (_, i) => `${i + 1}. Check step ${i + 1}`).join("\n");
 	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n${steps}` }] }] });
 	const lines = harness.renderWidget(120)!;
 	assert.equal(lines.length, 11);
@@ -441,7 +441,7 @@ test("keeps string widgets for RPC clients without terminal components", async (
 	const harness = createHarness();
 	harness.ctx.mode = "rpc";
 	await harness.commands.get("plan")?.("", harness.ctx);
-	const step = "Проверить длинный шаг плана и сохранить его полный текст для отображения клиентом RPC";
+	const step = "Check the long plan step and preserve its full text for the RPC client to display";
 	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n1. ${step}` }] }] });
 	assert.equal(harness.renderWidget(80), undefined);
 	assert.ok(harness.widgets.at(-1)?.[0]?.includes(step));

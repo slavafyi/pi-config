@@ -80,13 +80,6 @@ right block includes:
 - total session cost, including assistant messages, tool results with usage,
   compactions, branch summaries, and standalone usage entries such as cache warming.
 
-Subagent costs are included through `reportUsage` in `subagents.json`. The fork
-reports them through tool results, or persists any remainder at final settlement
-or shutdown. Pi aggregates nested codemode usage into its outer tool result;
-the footer counts that result once. Costs use recorded physical-model usage,
-including when a virtual model routes the request. These costs are separate
-from subscription quotas and the parent's context-window usage.
-
 After compaction, unknown context usage appears as `ctx:?/272k` until Pi receives
 a new model response.
 
