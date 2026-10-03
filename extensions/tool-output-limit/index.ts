@@ -9,6 +9,7 @@ import type {
   GrepToolDetails,
   ReadToolDetails,
   ReadToolInput,
+  ToolResultEventResult,
 } from "@earendil-works/pi-coding-agent";
 
 import { loadExtensionSettings } from "../shared/user-settings.ts";
@@ -83,10 +84,13 @@ export default function toolOutputLimit(pi: ExtensionAPI) {
   });
 
   pi.on("tool_result", async (event) => {
+    if (event.parentToolCallId !== undefined) return;
+
+    let patch: ToolResultEventResult | undefined;
     if (event.toolName === "bash") {
       const maxKiB = config.bash;
       if (maxKiB === undefined) return;
-      return limitBashOutput({
+      patch = await limitBashOutput({
         content: event.content,
         details: event.details as BashToolDetails | undefined,
         maxKiB,
@@ -98,7 +102,7 @@ export default function toolOutputLimit(pi: ExtensionAPI) {
     if (event.toolName === "grep") {
       const maxKiB = config.grep;
       if (maxKiB === undefined) return;
-      return limitGrepOutput({
+      patch = limitGrepOutput({
         content: event.content,
         details: event.details as GrepToolDetails | undefined,
         maxKiB,
@@ -108,12 +112,15 @@ export default function toolOutputLimit(pi: ExtensionAPI) {
     if (event.toolName === "read") {
       const maxKiB = config.read;
       if (maxKiB === undefined) return;
-      return limitReadOutput({
+      patch = limitReadOutput({
         content: event.content,
         details: event.details as ReadToolDetails | undefined,
         toolInput: event.input as ReadToolInput,
         maxKiB,
       });
     }
+
+    if (!patch) return;
+    return { ...patch, structuredContent: event.structuredContent };
   });
 }

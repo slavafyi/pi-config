@@ -1,6 +1,10 @@
 {
   "lastChangelogVersion": "1.0.0",
   "defaultThinkingLevel": "medium",
+  "defaultTools": ["+codemode"],
+  "codemode": {
+    "mode": "on"
+  },
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-astra",
   "editorPaddingX": 1,

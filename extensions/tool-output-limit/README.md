@@ -1,8 +1,9 @@
 # Tool Output Limit
 
-Limits the final text returned by Pi's built-in `bash`, `grep`, and `read` tools
+Limits the final text returned by direct `bash`, `grep`, and `read` calls
 before it enters the model context. Streaming output keeps Pi's normal behavior
 while a command is running. Image blocks returned by `read` are unchanged.
+Structured results are preserved separately from the limited model-facing text.
 
 ## Configuration
 
@@ -41,4 +42,24 @@ The tools use strategies suited to their output:
 All retained text is valid UTF-8. Truncation markers are included in the
 configured output-body limit; actionable notices are additional.
 
-Run `/reload` after changing the file.
+## Codemode
+
+Nested calls, identified by `parentToolCallId`, bypass this extension. Their
+results go to the calling tool or codemode script, not directly into the model
+context. Scripts can filter or aggregate them before returning output. Pi's
+native tool limits still apply; bypassing this extension does not make tool
+output unlimited.
+
+The final `codemode` result also uses Pi's native limit, not this extension's
+per-tool KiB limits. Codemode defaults to 10,000 estimated output tokens. A
+script can choose a different budget with a first-line option:
+
+```js
+// @options: {"max_output_tokens": 2000}
+```
+
+When its text exceeds that budget, Pi keeps the beginning and end, saves the
+full text to a temporary file, and returns the path. This is a script-controlled
+budget, not a global limit enforced by this extension.
+
+Run `/reload` after changing the configuration.
