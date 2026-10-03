@@ -14,6 +14,7 @@ function createHarness(initialEntries: any[] = [], activeBranch?: any[]) {
 	const statuses: Array<string | undefined> = [];
 	const widgets: Array<string[] | undefined> = [];
 	const pendingCustomMessages: any[] = [];
+	const notifications: string[] = [];
 	let themeName = "light";
 	let unsubscribed = false;
 	let agentRunActive = false;
@@ -62,7 +63,7 @@ function createHarness(initialEntries: any[] = [], activeBranch?: any[]) {
 			buildContextEntries: () => activeBranch ?? entries,
 		},
 		ui: {
-			notify: () => {},
+			notify: (text: string) => notifications.push(text),
 			setStatus: (_id: string, value: string | undefined) => statuses.push(value),
 			setWidget: (_id: string, value: string[] | undefined) => widgets.push(value),
 			select: async () => "Execute the plan (track progress)",
@@ -119,6 +120,7 @@ function createHarness(initialEntries: any[] = [], activeBranch?: any[]) {
 		statuses,
 		updateMessage,
 		widgets,
+		notifications,
 		setThemeName: (name: string) => {
 			themeName = name;
 		},
@@ -320,6 +322,31 @@ test("publishes only plan state transitions while preserving progress UI", async
 	assert.equal(statuses.at(-1), undefined);
 	assert.equal(widgets.at(-1), undefined);
 	assert.equal(harness.wasUnsubscribed(), true);
+});
+
+test("keeps full plan instructions in persistence, execution, resume, and completion", async () => {
+	const fullStep = "Run проверку длинного плана с сохранением всех условий и обязательно проверь заключительный результат";
+	const harness = createHarness();
+	await harness.commands.get("plan")?.("", harness.ctx);
+	await harness.endAgent({ messages: [{ role: "assistant", content: [{ type: "text", text: `Plan:\n1. ${fullStep}` }] }] });
+	const state = harness.entries.filter((entry) => entry.customType === "plan-mode").at(-1);
+	assert.equal(state.data.todos[0].text, fullStep);
+	assert.ok(harness.sentMessages.at(-1)?.message.content.includes(fullStep));
+	await harness.commands.get("todos")?.("", harness.ctx);
+	assert.ok(harness.notifications.at(-1)?.includes(fullStep));
+	assert.ok(!harness.widgets.at(-1)?.[0]?.includes("заключительный результат"));
+
+	const restored = createHarness(harness.entries);
+	await restored.handlers.get("session_start")?.({}, restored.ctx);
+	assert.equal((await restored.startAgent()).message, undefined);
+	assert.ok(restored.entries.find((entry) => entry.customType === "plan-mode-execute")?.content.includes(fullStep));
+	const done = { role: "assistant", content: [{ type: "text", text: "[DONE:1]" }] };
+	await restored.endMessage({ message: done });
+	await restored.endTurn({ message: done });
+	await restored.endAgent({ messages: [done] });
+	const completion = restored.entries.filter((entry) => entry.customType === "plan-complete");
+	assert.equal(completion.length, 1);
+	assert.deepEqual(completion[0].data.items, [fullStep]);
 });
 
 test("restores plan state only from the active branch", async () => {

@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key, Text } from "@earendil-works/pi-tui";
+import { Key, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { FOOTER_INVALIDATE_EVENT } from "../footer/events.ts";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
@@ -68,7 +68,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		const data = entry.data as PlanCompleteData | undefined;
 		const lines = [theme.fg("success", theme.bold("✓ Plan Complete"))];
 		for (const item of data?.items ?? []) {
-			lines.push(`${theme.fg("success", "✓ ")}${theme.fg("muted", item)}`);
+			lines.push(`${theme.fg("success", "✓ ")}${theme.fg("muted", truncateToWidth(item, 50, "..."))}`);
 		}
 		return new Text(lines.join("\n"), 1, 0);
 	});
@@ -104,12 +104,13 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 		if (executionMode && todoItems.length > 0) {
 			const lines = todoItems.map((item) => {
+				const label = truncateToWidth(item.text, 50, "...");
 				if (item.completed) {
 					return (
-						ctx.ui.theme.fg("success", "✓ ") + ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(item.text))
+						ctx.ui.theme.fg("success", "✓ ") + ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(label))
 					);
 				}
-				return `${ctx.ui.theme.fg("muted", "○ ")}${item.text}`;
+				return `${ctx.ui.theme.fg("muted", "○ ")}${label}`;
 			});
 			publishWidget(ctx, lines);
 		} else {

@@ -101,23 +101,11 @@ export interface TodoItem {
 }
 
 export function cleanStepText(text: string): string {
-	let cleaned = text
+	return text
 		.replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1")
 		.replace(/`([^`]+)`/g, "$1")
-		.replace(
-			/^(Use|Run|Execute|Create|Write|Read|Check|Verify|Update|Modify|Add|Remove|Delete|Install)\s+(the\s+)?/i,
-			"",
-		)
 		.replace(/\s+/g, " ")
 		.trim();
-
-	if (cleaned.length > 0) {
-		cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-	}
-	if (cleaned.length > 50) {
-		cleaned = `${cleaned.slice(0, 47)}...`;
-	}
-	return cleaned;
 }
 
 export function extractTodoItems(message: string): TodoItem[] {

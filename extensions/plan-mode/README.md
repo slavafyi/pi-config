@@ -6,7 +6,7 @@ Read-only exploration mode for safe code analysis.
 
 - **Built-in write tools blocked**: Blocks edit/write while preserving the provider tool prefix
 - **Bash allowlist**: Only read-only bash commands are allowed
-- **Plan extraction**: Extracts numbered steps from `Plan:` sections
+- **Plan extraction**: Extracts numbered steps from `Plan:` sections without shortening their instructions
 - **Progress tracking**: Widget shows completion status during execution
 - **[DONE:n] markers**: Explicit step completion tracking
 - **Session persistence**: State survives session resume
@@ -55,8 +55,8 @@ instructions in context.
 - Plan-mode restrictions are inactive; the normal active-tool configuration applies
 - Agent executes steps in order
 - `[DONE:n]` markers track completion
-- Widget shows progress
-- Completed plans render as TUI-only session entries
+- Widget shows progress with compact labels; saved steps, `/todos`, and execution context retain the full text
+- Completed plans render as TUI-only session entries with full text stored in their data
 
 Streaming progress is scanned incrementally with a short per-text-block tail so
 markers split across provider chunks are recognized without rescanning the full
