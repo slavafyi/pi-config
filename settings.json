@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.0.1",
+  "lastChangelogVersion": "1.0.2",
   "defaultThinkingLevel": "medium",
   "defaultTools": [
     "+codemode"
@@ -13,11 +13,11 @@
   "packages": [
     "git:github.com/ttttmr/pi-wakatime@c5e82040aea0a78aba176dc6646d5eedb0f22888",
     "git:github.com/ShpetimA/pi-fff@bb35f3659f3090534c859223200feafb2897a2a6",
-    "git:github.com/ronind/pi-openai-server-compaction@fd884f3e08ea817bfdb503a0fcbde9ca3842f37e",
+    "git:github.com/ronind/pi-openai-server-compaction@d5131a2652d47af7f608a57cd5c306411bf65cf4",
     "git:github.com/edxeth/pi-auto-session-titles@53edd291cb53daa09ec099df73cb77a4e1e74b89",
     "git:github.com/yusukeshib/pi-datetime@8ce467f64d4ff374535bdd8e46fa3b8de824ac87",
     "git:github.com/peterp/pi-sidequest@0d10f4481b2cf4b770266e869aca95d41d6f2ab8",
-    "git:github.com/ronind/pi-subagents@cf41893176c74bd2c666153b6418e517113a4fcd",
+    "git:github.com/ronind/pi-subagents@ca3781ad93f700b5fe128d187efa02140879449b",
     "npm:@earendil-works/pi-voice@0.1.0",
     "git:github.com/dimk90/pi-context-view@0eb5f9773c91b63b873da4d9ca6fa6caf795e91a",
     "git:github.com/penumbral-labs/pi-copy-code@2e35feac8f34dc7290c579fa981ac4e1125f69fd",
