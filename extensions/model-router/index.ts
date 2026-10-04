@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import { loadExtensionSettings } from "../shared/user-settings.ts";
 import { parseRouterConfig, type RouterConfig } from "./config.ts";
 import { isContinuation, recommend } from "./advisor.ts";
@@ -13,8 +13,8 @@ import type { Recommendation } from "./types.ts";
 const ENTRY_TYPE = "model-router-recommendation";
 interface RecommendationEntry {
   recommendation: Recommendation;
-  display: boolean;
 }
+const WIDGET_KEY = "model-router";
 
 export default function modelRouter(pi: ExtensionAPI) {
   let config: RouterConfig | undefined;
@@ -30,6 +30,24 @@ export default function modelRouter(pi: ExtensionAPI) {
     pending = undefined;
   }
 
+  function showRecommendation(ctx: ExtensionContext, recommendation: Recommendation | undefined) {
+    if (!ctx.hasUI || ctx.mode !== "tui") return;
+    if (!recommendation) {
+      ctx.ui.setWidget(WIDGET_KEY, undefined);
+      return;
+    }
+    ctx.ui.setWidget(WIDGET_KEY, () => ({
+      render(width) {
+        if (width <= 2) return [" ".repeat(Math.max(0, width))];
+        const theme = ctx.ui.theme;
+        const line = theme.fg("muted", "Suggested: ") +
+          theme.fg("accent", `${recommendation.model} / ${recommendation.thinkingLevel}`);
+        return [` ${truncateToWidth(line, width - 2)} `];
+      },
+      invalidate() {},
+    }), { placement: "aboveEditor" });
+  }
+
   function restore(ctx: ExtensionContext) {
     cancel();
     last = undefined;
@@ -40,21 +58,8 @@ export default function modelRouter(pi: ExtensionAPI) {
       const recommendation = readRecommendation(data?.recommendation);
       if (recommendation) last = recommendation;
     }
+    showRecommendation(ctx, enabled ? last : undefined);
   }
-
-  pi.registerEntryRenderer<RecommendationEntry>(ENTRY_TYPE, (entry, options, theme) => {
-    const data = entry.data;
-    if (!data?.display) return undefined;
-    const recommendation = readRecommendation(data.recommendation);
-    if (!recommendation) return undefined;
-    const summary = `Model recommendation: ${recommendation.model} / ${recommendation.thinkingLevel}`;
-    return new Text(
-      options.expanded
-        ? `${theme.fg("accent", summary)}\n${theme.fg("muted", formatRecommendation(recommendation).split("\n").slice(1).join("\n"))}`
-        : `${theme.fg("accent", summary)}\n${theme.fg("muted", recommendation.explanation)}`,
-      0, 0,
-    );
-  });
 
   async function check(prompt: string, ctx: ExtensionContext, hasImages = false, manual = false) {
     cancel();
@@ -64,6 +69,7 @@ export default function modelRouter(pi: ExtensionAPI) {
       return;
     }
     const settings = config;
+    showRecommendation(ctx, undefined);
     const requestGeneration = generation;
     const sessionId = ctx.sessionManager.getSessionId();
     const controller = new AbortController();
@@ -85,9 +91,9 @@ export default function modelRouter(pi: ExtensionAPI) {
       if (signal.aborted || requestGeneration !== generation || sessionId !== ctx.sessionManager.getSessionId()) return;
       last = recommendation;
       lastCheckFailed = false;
-      const display = manual || differsFromCurrent(recommendation);
-      pi.appendEntry<RecommendationEntry>(ENTRY_TYPE, { recommendation, display });
-      if (display && ctx.hasUI && ctx.mode !== "tui") ctx.ui.notify(formatRecommendation(recommendation), "info");
+      pi.appendEntry<RecommendationEntry>(ENTRY_TYPE, { recommendation });
+      showRecommendation(ctx, recommendation);
+      if ((manual || differsFromCurrent(recommendation)) && ctx.hasUI && ctx.mode !== "tui") ctx.ui.notify(formatRecommendation(recommendation), "info");
     } catch {
       if (signal.aborted || requestGeneration !== generation || sessionId !== ctx.sessionManager.getSessionId()) return;
       lastCheckFailed = true;
@@ -111,6 +117,7 @@ export default function modelRouter(pi: ExtensionAPI) {
       if (command === "off") {
         cancel();
         enabled = false;
+        showRecommendation(ctx, undefined);
         ctx.ui.notify("Model advisor off for this session.", "info");
       } else if (command === "on") {
         if (!config) {
@@ -118,6 +125,7 @@ export default function modelRouter(pi: ExtensionAPI) {
           return;
         }
         enabled = true;
+        showRecommendation(ctx, lastCheckFailed ? undefined : last);
         ctx.ui.notify("Model advisor on for this session. No automatic model or thinking changes.", "info");
       } else if (command.startsWith("check ") && command.slice(6).trim()) {
         await check(command.slice(6).trim(), ctx, false, true);
@@ -142,5 +150,9 @@ export default function modelRouter(pi: ExtensionAPI) {
   });
   pi.on("session_tree", (_event, ctx) => restore(ctx));
   pi.on("model_select", () => cancel());
-  pi.on("session_shutdown", () => { cancel(); last = undefined; });
+  pi.on("session_shutdown", (_event, ctx) => {
+    cancel();
+    last = undefined;
+    showRecommendation(ctx, undefined);
+  });
 }

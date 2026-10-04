@@ -39,13 +39,15 @@ function setup(t: TestContext, config: unknown = { enabled: true }) {
   const handlers = new Map<string, (event: any, ctx: any) => any>();
   const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
   const renderers = new Map<string, (...args: any[]) => any>();
+  const widgets = new Map<string, () => any>();
+  const widgetOptions = new Map<string, unknown>();
   const entries: any[] = [];
   const notifications: { text: string; level: string }[] = [];
   const calls: any[] = [];
   const session = SessionManager.inMemory();
   session.appendMessage({ role: "user", content: "Previous task context", timestamp: 1 });
   const harness = {
-    handlers, commands, renderers, entries, notifications, calls, session,
+    handlers, commands, renderers, widgets, widgetOptions, entries, notifications, calls, session,
     classify: async (_model: any, context: any, _options: any) => response(context),
     ctx: {
       model: models[1], thinkingLevel: "medium", hasUI: true, mode: "tui", signal: undefined as AbortSignal | undefined,
@@ -58,7 +60,15 @@ function setup(t: TestContext, config: unknown = { enabled: true }) {
           return harness.classify(args[0], args[1], args[2]);
         },
       },
-      ui: { notify: (text: string, level: string) => notifications.push({ text, level }) },
+      ui: {
+        notify: (text: string, level: string) => notifications.push({ text, level }),
+        theme: { fg: (_color: string, text: string) => text },
+        setWidget: (key: string, content: (() => any) | undefined, options: unknown) => {
+          if (content) widgets.set(key, content);
+          else widgets.delete(key);
+          widgetOptions.set(key, options);
+        },
+      },
     },
     start: () => handlers.get("session_start")?.({}, harness.ctx),
     input: (text: string, patch: Record<string, unknown> = {}) => handlers.get("input")?.({ text, source: "interactive", ...patch }, harness.ctx),
@@ -95,7 +105,9 @@ test("automatic recommendations never change the prompt, model, thinking, or mod
   assert.equal(entry.customType, ENTRY_TYPE);
   assert.equal(entry.data.recommendation.model, "gpt-6-luna");
   assert.equal(entry.data.recommendation.thinkingLevel, "low");
-  assert.equal(entry.data.display, true);
+  assert.equal(h.renderers.size, 0);
+  assert.equal(h.widgets.get("model-router")!().render(80)[0], " Suggested: gpt-6-luna / low ");
+  assert.deepEqual(h.widgetOptions.get("model-router"), { placement: "aboveEditor" });
   assert.equal(h.ctx.model, modelBefore);
   assert.equal(h.ctx.thinkingLevel, "medium");
   assert.deepEqual(h.session.buildSessionContext().messages, before);
@@ -104,29 +116,33 @@ test("automatic recommendations never change the prompt, model, thinking, or mod
   assert.equal(h.handlers.has("tool_result"), false);
 });
 
-test("matching recommendations are retained for /router but hidden automatically", async (t) => {
+test("matching recommendations also appear above the editor without a current-model comparison", async (t) => {
   const h = setup(t);
   h.classify = async (_model, context) => response(context, "gpt-6.1-sol", "medium");
   await h.input("Implement a normal feature");
-  assert.equal(h.entries[0].data.display, false);
-  const theme = { fg: (_color: string, text: string) => text };
-  assert.equal(h.renderers.get(ENTRY_TYPE)!(h.entries[0], { expanded: false }, theme), undefined);
+  const line = h.widgets.get("model-router")!().render(80)[0];
+  assert.equal(line, " Suggested: gpt-6.1-sol / medium ");
+  assert.doesNotMatch(line, /Current|No settings changed/);
+  assert.equal(h.renderers.size, 0);
   await h.command("");
   assert.match(h.notifications.at(-1)!.text, /Last recommendation/);
   assert.match(h.notifications.at(-1)!.text, /gpt-6.1-sol \/ medium/);
 });
 
-test("thinking-only differences are displayed and renderer fits narrow widths", async (t) => {
+test("recommendation widget is one padded line at narrow widths and refreshes theme colors", async (t) => {
   const h = setup(t);
   h.classify = async (_model, context) => response(context, "gpt-6.1-sol", "high");
   await h.input("Investigate conflicting evidence");
-  assert.equal(h.entries[0].data.display, true);
-  const theme = { fg: (_color: string, text: string) => text };
-  for (const expanded of [false, true]) {
-    const component = h.renderers.get(ENTRY_TYPE)!(h.entries[0], { expanded }, theme);
-    for (const width of [10, 30, 80]) assert.ok(component.render(width).every((line: string) => visibleWidth(line) <= width));
-    component.invalidate();
+  const component = h.widgets.get("model-router")!();
+  for (const width of [0, 1, 2, 10, 30, 80]) {
+    const lines = component.render(width);
+    assert.equal(lines.length, 1);
+    assert.ok(visibleWidth(lines[0]) <= width);
+    if (width > 2) assert.ok(lines[0].startsWith(" ") && lines[0].endsWith(" "));
   }
+  h.ctx.ui.theme.fg = (_color, text) => `\u001b[32m${text}\u001b[0m`;
+  component.invalidate();
+  assert.match(component.render(80)[0], /\u001b\[32m/);
 });
 
 test("acknowledgements, slash commands, extension input, and non-UI runs do not classify", async (t) => {
@@ -161,7 +177,7 @@ test("on/off are session-only and explicit checks work while automatic advice is
   assert.equal(h.calls.length, 0);
   await h.command("check Fix a typo");
   assert.equal(h.calls.length, 1);
-  assert.equal(h.entries[0].data.display, true);
+  assert.ok(h.widgets.has("model-router"));
   await h.command("on");
   await h.input("Fix another typo");
   assert.equal(h.calls.length, 2);
@@ -173,6 +189,7 @@ test("errors and unknown choices fail open without leaking provider error bodies
   assert.equal(await h.input("Fix a typo"), undefined);
   assert.equal(h.entries.length, 0);
   assert.match(h.notifications.at(-1)!.text, /unavailable/);
+  assert.equal(h.widgets.has("model-router"), false);
   assert.doesNotMatch(h.notifications.at(-1)!.text, /SECRET/);
   await h.command("status");
   assert.match(h.notifications.at(-1)!.text, /latest check failed/);
@@ -237,6 +254,40 @@ test("reload and tree navigation restore only the active branch's latest valid r
   await h.handlers.get("session_tree")?.({}, h.ctx);
   await h.command("status");
   assert.match(h.notifications.at(-1)!.text, /Last recommendation:\nModel recommendation: openai-codex\/gpt-6-luna/);
+});
+
+test("off and shutdown clear only the advisor widget, and on restores its latest advice", async (t) => {
+  const h = setup(t);
+  h.ctx.ui.setWidget("plan-todos", () => ({ render: () => ["Plan progress"] }), {});
+  await h.input("Fix a typo");
+  const previous = h.widgets.get("model-router");
+  await h.input("окей");
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.widgets.get("model-router"), previous);
+  await h.command("off");
+  assert.equal(h.widgets.has("model-router"), false);
+  assert.ok(h.widgets.has("plan-todos"));
+  await h.command("on");
+  assert.ok(h.widgets.has("model-router"));
+  await h.handlers.get("session_shutdown")?.({}, h.ctx);
+  assert.equal(h.widgets.has("model-router"), false);
+  assert.ok(h.widgets.has("plan-todos"));
+});
+
+test("tree navigation replaces or clears the widget using active-branch history", async (t) => {
+  const h = setup(t);
+  const rootId = h.session.getBranch()[0]!.id;
+  await h.input("Fix a typo");
+  const firstId = h.entries[0].id;
+  h.classify = async (_model, context) => response(context, "gpt-6-astra", "high");
+  await h.input("A hard task");
+  assert.match(h.widgets.get("model-router")!().render(80)[0], /gpt-6-astra/);
+  h.session.branch(firstId);
+  await h.handlers.get("session_tree")?.({}, h.ctx);
+  assert.match(h.widgets.get("model-router")!().render(80)[0], /gpt-6-luna/);
+  h.session.branch(rootId);
+  await h.handlers.get("session_tree")?.({}, h.ctx);
+  assert.equal(h.widgets.has("model-router"), false);
 });
 
 test("RPC displays advice via notification without changing generation", async (t) => {

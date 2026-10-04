@@ -11,10 +11,17 @@ sessions, substantive user input gets one bounded classification before normal
 processing. The default deadline is two seconds. Classification failures warn
 and let the original input continue unchanged.
 
-When either the model or thinking recommendation differs, the TUI shows a
-compact session entry. Expand it to see the original model/thinking comparison.
-Matching decisions are saved without showing a card. RPC displays differing
-recommendations through a notification.
+The TUI shows the latest recommendation as one padded line above the editor:
+`Suggested: gpt-6-luna / low`. It does not repeat the current selection from the
+footer, and no recommendation cards are added to the transcript. Matching
+recommendations also appear in this line. `/router` shows the explanation and
+original model/thinking comparison. RPC still displays differing recommendations
+through a notification.
+
+The line is replaced on a successful check, cleared while checking or after a
+failure, and hidden by `/router off` or session shutdown. `/router on`, reload,
+and tree navigation restore the appropriate saved recommendation. Explicit
+`/router check` displays its result even while automatic advice is off.
 
 - `/router` or `/router status`: advisor state and the latest recommendation.
 - `/router check <task>`: explicitly assess a task, including while automatic
@@ -120,7 +127,7 @@ a zero catalog cost must not be interpreted as free API access. API prices are
 not a prediction of Codex subscription quota consumption.
 
 Successful recommendations, original model/thinking, and reported usage are
-stored as custom session entries, not model-context messages. Prompt/history
+stored as non-rendered custom session entries, not model-context messages. Prompt/history
 excerpts are not duplicated into these entries. `/reload`, resume, and tree
 navigation restore the latest valid recommendation on the active branch.
 Turning the advisor off does not erase existing records. Recommendations do not
@@ -156,8 +163,8 @@ pnpm typecheck
 Tests use mocked classification, temporary settings, and real in-memory Pi
 sessions. They do not call paid APIs. For a live check, use `/router check Fix a
 README typo`, verify that both model and thinking remain unchanged, inspect
-`/router`, then try `/router off` and `/router on`. Check narrow/wide terminals,
-expansion, theme changes, and reload/resume.
+`/router`, then try `/router off` and `/router on`. Check the padded line above
+the editor at narrow/wide widths, theme changes, and reload/resume.
 
 ## Model guidance sources
 
