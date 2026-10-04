@@ -57,40 +57,6 @@ context and token usage low.
 Credentials, sessions, installed package checkouts, and trust decisions are
 excluded from Git.
 
-### OpenAI authentication
-
-Use `/login openai` and choose **Sign in with ChatGPT** for subscription access.
-Then select `openai/gpt-6.1-sol` with `/model`. This configuration uses it for
-new sessions, automatic session titles, and session recall.
-
-Resumed sessions keep their saved provider. Changing `defaultProvider` does not
-switch an existing `openai-codex` session to `openai`. The context overrides in
-`models.json` cover both providers, including the 372,000-token setting for
-GPT-6.1 Sol. These overrides change Pi\'s local limit; they do not increase a
-provider\'s server-side limit.
-
-Pi also supports API keys without an additional extension. To use the key in
-`OPENAI_API_KEY` instead of the saved subscription for one invocation:
-
-```bash
-pi --model openai/gpt-6.1-sol --api-key "$OPENAI_API_KEY"
-```
-
-An explicit `--api-key` wins over saved OAuth credentials. Without it, saved
-OpenAI OAuth wins over `OPENAI_API_KEY`. The API invocation uses separate API
-billing. The resolved key is passed as a process argument; do not paste a
-literal key into shell history or use this on a machine with untrusted users.
-
-The server-compaction fork uses Pi\'s native transport and local compaction for
-ChatGPT OAuth. Its server-side compaction and continuation remain available for
-API-key and legacy Codex access. The footer\'s quota indicator supports only
-`openai-codex`; it clears that quota on `openai` rather than presenting it as a
-subscription-sharing limit.
-
-Pi stores the installation-specific `deviceId` in global `settings.json` during
-ChatGPT login. Keep that field local and out of commits. It is not an access
-token; credentials remain in the ignored `auth.json`.
-
 ### Updating
 
 ```bash
@@ -148,7 +114,7 @@ Packages are declared in `settings.json` and pinned to immutable git commits or 
 |---------|---------|
 | [pi-wakatime](https://github.com/ttttmr/pi-wakatime) | WakaTime activity tracking |
 | [pi-fff](https://github.com/ShpetimA/pi-fff) | Fast file and content search tools |
-| [pi-openai-server-compaction](https://github.com/ronind/pi-openai-server-compaction/tree/62a918dd9cb8eae74426caa334c4289d7641e81a) | OpenAI server-side compaction; our fork includes [usage reporting](https://github.com/algal/pi-openai-server-compaction/pull/15), [context preservation](https://github.com/algal/pi-openai-server-compaction/pull/18), Pi 1.0.2 loader compatibility, and native ChatGPT OAuth fallback |
+| [pi-openai-server-compaction](https://github.com/ronind/pi-openai-server-compaction/tree/bugfix/pi-extension-loader) | OpenAI server-side compaction; our fork includes [usage reporting](https://github.com/algal/pi-openai-server-compaction/pull/15), [context preservation](https://github.com/algal/pi-openai-server-compaction/pull/18), and Pi 1.0.2 loader compatibility |
 | [pi-auto-session-titles](https://github.com/edxeth/pi-auto-session-titles) | Automatic session titles |
 | [pi-datetime](https://github.com/yusukeshib/pi-datetime) | Date and time context |
 | [pi-sidequest](https://github.com/peterp/pi-sidequest) | Side-task execution |
