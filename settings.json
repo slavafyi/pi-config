@@ -23,7 +23,7 @@
     "git:github.com/penumbral-labs/pi-copy-code@2e35feac8f34dc7290c579fa981ac4e1125f69fd",
     "npm:@ogulcancelik/pi-session-recall@1.0.7"
   ],
-  "theme": "koda-light/koda-dark",
+  "theme": "system",
   "collapseChangelog": true,
   "quietStartup": true,
   "autoSessionTitles": {
