@@ -99,6 +99,7 @@ Run `/reload` in existing sessions to enable codemode.
 | `tool-output-limit` | Independent configurable limits for direct bash, grep, and text read output; nested calls bypass these limits |
 | `footer` | Responsive project, model, extension-status, quota, cache, context, and cost footer |
 | `plan-mode` | Read-only planning with cache-preserving execution transitions |
+| `model-router` | Jev recommendations for OpenAI Codex models and thinking, without switching |
 | `usage` | Codex quota status |
 | `subagent-policy` | Automatic delegation policy with foreground execution by default |
 
