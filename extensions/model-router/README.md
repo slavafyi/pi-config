@@ -7,21 +7,25 @@ policy remain unchanged. No virtual model or automatic switching is registered.
 ## Use
 
 Run `/reload` after installation or configuration changes. In TUI and RPC
-sessions, substantive user input gets one bounded classification before normal
-processing. The default deadline is two seconds. Classification failures warn
-and let the original input continue unchanged.
+sessions, substantive user input starts one bounded classification in the
+background. Input processing and generation do **not** wait for Jev. The default
+two-second deadline limits the background check, not message submission.
+Classification failures warn without affecting generation. Explicit
+`/router check` waits for its requested result.
 
-The TUI shows the latest recommendation as one padded line above the editor:
-`Suggested: gpt-6-luna / low`. It does not repeat the current selection from the
-footer, and no recommendation cards are added to the transcript. Matching
-recommendations also appear in this line. `/router` shows the explanation and
-original model/thinking comparison. RPC still displays differing recommendations
-through a notification.
+The TUI shows a padded recommendation card with the suggested model, thinking,
+and explanation. It does not duplicate the current selection from the footer.
+Matching recommendations are saved without a card. `/router` shows the latest
+result and original model/thinking comparison. RPC uses notifications.
 
-The line is replaced on a successful check, cleared while checking or after a
-failure, and hidden by `/router off` or session shutdown. `/router on`, reload,
-and tree navigation restore the appropriate saved recommendation. Explicit
-`/router check` displays its result even while automatic advice is off.
+Advice is associated with the matching delivered user message, not merely the
+next assistant response. If ready before that response starts, its entry is
+appended after the user message and before the response. When a result arrives
+while an assistant response is streaming, Pi can insert its card before that
+streaming response. If the response already finished, the card appears later;
+strict placement immediately under the prompt is not guaranteed without
+waiting. No input-area widget is installed. Explicit `/router check` displays a
+standalone card even while automatic advice is off.
 
 - `/router` or `/router status`: advisor state and the latest recommendation.
 - `/router check <task>`: explicitly assess a task, including while automatic
@@ -63,7 +67,8 @@ The evaluator defaults to `typesafe/jev-latest`. Set `TYPESAFE_API_KEY` in the
 process that starts Pi, or use Pi's supported provider authentication. No keys
 are stored in this extension's configuration. `timeoutMs` must be an integer
 from 100 to 10,000. A timeout is a hard limit even if an evaluator ignores
-cancellation; there are no automatic retries.
+cancellation; there are no automatic retries. Automatic checks use their own
+cancellation signal, not the signal of an already running generation.
 
 `profiles` optionally replaces the complete default list (one to eight entries):
 
@@ -127,7 +132,7 @@ a zero catalog cost must not be interpreted as free API access. API prices are
 not a prediction of Codex subscription quota consumption.
 
 Successful recommendations, original model/thinking, and reported usage are
-stored as non-rendered custom session entries, not model-context messages. Prompt/history
+stored as custom session entries, not model-context messages. Prompt/history
 excerpts are not duplicated into these entries. `/reload`, resume, and tree
 navigation restore the latest valid recommendation on the active branch.
 Turning the advisor off does not erase existing records. Recommendations do not
@@ -163,8 +168,10 @@ pnpm typecheck
 Tests use mocked classification, temporary settings, and real in-memory Pi
 sessions. They do not call paid APIs. For a live check, use `/router check Fix a
 README typo`, verify that both model and thinking remain unchanged, inspect
-`/router`, then try `/router off` and `/router on`. Check the padded line above
-the editor at narrow/wide widths, theme changes, and reload/resume.
+`/router`, then try `/router off` and `/router on`. Check padded cards at
+narrow/wide widths, theme changes, and reload/resume. For automatic advice,
+confirm that input and generation start while a deliberately slow classifier
+is still pending, and that no card is recorded ahead of its user message.
 
 ## Model guidance sources
 

@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import { Text } from "@earendil-works/pi-tui";
 import { loadExtensionSettings } from "../shared/user-settings.ts";
 import { parseRouterConfig, type RouterConfig } from "./config.ts";
 import { isContinuation, recommend } from "./advisor.ts";
@@ -13,8 +13,14 @@ import type { Recommendation } from "./types.ts";
 const ENTRY_TYPE = "model-router-recommendation";
 interface RecommendationEntry {
   recommendation: Recommendation;
+  display?: boolean;
 }
-const WIDGET_KEY = "model-router";
+interface AdviceJob {
+  prompt: string;
+  recommendation?: Recommendation;
+  readyToRecord: boolean;
+  recorded: boolean;
+}
 
 export default function modelRouter(pi: ExtensionAPI) {
   let config: RouterConfig | undefined;
@@ -23,6 +29,8 @@ export default function modelRouter(pi: ExtensionAPI) {
   let lastCheckFailed = false;
   let generation = 0;
   let pending: AbortController | undefined;
+  let queuedAdvice: AdviceJob[] = [];
+  let deliveredAdvice: AdviceJob | undefined;
 
   function cancel() {
     generation += 1;
@@ -30,26 +38,37 @@ export default function modelRouter(pi: ExtensionAPI) {
     pending = undefined;
   }
 
-  function showRecommendation(ctx: ExtensionContext, recommendation: Recommendation | undefined) {
-    if (!ctx.hasUI || ctx.mode !== "tui") return;
-    if (!recommendation) {
-      ctx.ui.setWidget(WIDGET_KEY, undefined);
-      return;
-    }
-    ctx.ui.setWidget(WIDGET_KEY, () => ({
-      render(width) {
-        if (width <= 2) return [" ".repeat(Math.max(0, width))];
-        const theme = ctx.ui.theme;
-        const line = theme.fg("muted", "Suggested: ") +
-          theme.fg("accent", `${recommendation.model} / ${recommendation.thinkingLevel}`);
-        return [` ${truncateToWidth(line, width - 2)} `];
-      },
-      invalidate() {},
-    }), { placement: "aboveEditor" });
+  function clearQueuedAdvice() {
+    queuedAdvice = [];
+    deliveredAdvice = undefined;
   }
+
+  function recordRecommendation(ctx: ExtensionContext, recommendation: Recommendation, manual = false) {
+    last = recommendation;
+    const display = manual || differsFromCurrent(recommendation);
+    pi.appendEntry<RecommendationEntry>(ENTRY_TYPE, { recommendation, display });
+    if (display && ctx.hasUI && ctx.mode !== "tui") ctx.ui.notify(formatRecommendation(recommendation), "info");
+  }
+
+  function recordWhenReady(ctx: ExtensionContext, job: AdviceJob) {
+    if (!job.readyToRecord || !job.recommendation || job.recorded) return;
+    job.recorded = true;
+    recordRecommendation(ctx, job.recommendation);
+  }
+
+  pi.registerEntryRenderer<RecommendationEntry>(ENTRY_TYPE, (entry, _options, theme) => {
+    if (!entry.data?.display) return undefined;
+    const recommendation = readRecommendation(entry.data.recommendation);
+    if (!recommendation) return undefined;
+    return new Text(
+      `${theme.fg("accent", `Model recommendation: ${recommendation.model} / ${recommendation.thinkingLevel}`)}\n${theme.fg("muted", recommendation.explanation)}`,
+      1, 0,
+    );
+  });
 
   function restore(ctx: ExtensionContext) {
     cancel();
+    clearQueuedAdvice();
     last = undefined;
     lastCheckFailed = false;
     for (const entry of ctx.sessionManager.getBranch()) {
@@ -58,7 +77,6 @@ export default function modelRouter(pi: ExtensionAPI) {
       const recommendation = readRecommendation(data?.recommendation);
       if (recommendation) last = recommendation;
     }
-    showRecommendation(ctx, enabled ? last : undefined);
   }
 
   async function check(prompt: string, ctx: ExtensionContext, hasImages = false, manual = false) {
@@ -69,12 +87,13 @@ export default function modelRouter(pi: ExtensionAPI) {
       return;
     }
     const settings = config;
-    showRecommendation(ctx, undefined);
     const requestGeneration = generation;
     const sessionId = ctx.sessionManager.getSessionId();
     const controller = new AbortController();
     pending = controller;
-    const signal = ctx.signal ? AbortSignal.any([controller.signal, ctx.signal]) : controller.signal;
+    const job: AdviceJob | undefined = manual ? undefined : { prompt, readyToRecord: false, recorded: false };
+    if (job) queuedAdvice.push(job);
+    const signal = manual && ctx.signal ? AbortSignal.any([controller.signal, ctx.signal]) : controller.signal;
     try {
       const messages = ctx.sessionManager.getBranch().flatMap((entry): AgentMessage[] =>
         entry.type === "message" ? [entry.message] : [],
@@ -91,23 +110,45 @@ export default function modelRouter(pi: ExtensionAPI) {
       if (signal.aborted || requestGeneration !== generation || sessionId !== ctx.sessionManager.getSessionId()) return;
       last = recommendation;
       lastCheckFailed = false;
-      pi.appendEntry<RecommendationEntry>(ENTRY_TYPE, { recommendation });
-      showRecommendation(ctx, recommendation);
-      if ((manual || differsFromCurrent(recommendation)) && ctx.hasUI && ctx.mode !== "tui") ctx.ui.notify(formatRecommendation(recommendation), "info");
+      if (manual) recordRecommendation(ctx, recommendation, true);
+      else if (job) {
+        job.recommendation = recommendation;
+        recordWhenReady(ctx, job);
+      }
     } catch {
       if (signal.aborted || requestGeneration !== generation || sessionId !== ctx.sessionManager.getSessionId()) return;
       lastCheckFailed = true;
       if (ctx.hasUI) ctx.ui.notify("Model recommendation unavailable. Continuing without changing model or thinking.", "warning");
     } finally {
       if (pending === controller) pending = undefined;
+      if (job && !job.recommendation) {
+        queuedAdvice = queuedAdvice.filter((item) => item !== job);
+        if (deliveredAdvice === job) deliveredAdvice = undefined;
+      }
     }
   }
 
-  pi.on("input", async (event, ctx) => {
+  pi.on("input", (event, ctx) => {
     cancel();
     if (!enabled || !ctx.hasUI || event.source === "extension" ||
       !event.text.trim() || event.text.trimStart().startsWith("/") || isContinuation(event.text)) return;
-    await check(event.text, ctx, Boolean(event.images?.length));
+    void check(event.text, ctx, Boolean(event.images?.length));
+  });
+
+  pi.on("message_start", (event, ctx) => {
+    if (event.message.role !== "user" && event.message.role !== "assistant") return;
+    // The previous user message is persisted before the next message starts.
+    if (deliveredAdvice) {
+      deliveredAdvice.readyToRecord = true;
+      recordWhenReady(ctx, deliveredAdvice);
+      deliveredAdvice = undefined;
+    }
+    if (event.message.role !== "user") return;
+    const content = event.message.content;
+    const text = typeof content === "string" ? content : content
+      .filter((block) => block.type === "text").map((block) => block.text).join("\n");
+    const index = queuedAdvice.findIndex((item) => text === item.prompt || text.startsWith(`${item.prompt}\n\n`));
+    if (index !== -1) deliveredAdvice = queuedAdvice.splice(index, 1)[0]!;
   });
 
   pi.registerCommand("router", {
@@ -117,7 +158,7 @@ export default function modelRouter(pi: ExtensionAPI) {
       if (command === "off") {
         cancel();
         enabled = false;
-        showRecommendation(ctx, undefined);
+        clearQueuedAdvice();
         ctx.ui.notify("Model advisor off for this session.", "info");
       } else if (command === "on") {
         if (!config) {
@@ -125,7 +166,6 @@ export default function modelRouter(pi: ExtensionAPI) {
           return;
         }
         enabled = true;
-        showRecommendation(ctx, lastCheckFailed ? undefined : last);
         ctx.ui.notify("Model advisor on for this session. No automatic model or thinking changes.", "info");
       } else if (command.startsWith("check ") && command.slice(6).trim()) {
         await check(command.slice(6).trim(), ctx, false, true);
@@ -149,10 +189,10 @@ export default function modelRouter(pi: ExtensionAPI) {
     if (raw !== undefined && !config && ctx.hasUI) ctx.ui.notify("Invalid extensions.model-router configuration. Advisor disabled.", "warning");
   });
   pi.on("session_tree", (_event, ctx) => restore(ctx));
-  pi.on("model_select", () => cancel());
+  pi.on("model_select", () => { cancel(); clearQueuedAdvice(); });
   pi.on("session_shutdown", (_event, ctx) => {
     cancel();
+    clearQueuedAdvice();
     last = undefined;
-    showRecommendation(ctx, undefined);
   });
 }
