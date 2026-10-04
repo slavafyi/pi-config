@@ -1,6 +1,20 @@
-import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import { getSupportedThinkingLevels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { Candidate, ModelProfile } from "./types.ts";
+
+export const EFFORT: Readonly<Record<ModelThinkingLevel, string>> = {
+  off: "No reasoning needed; a direct extraction or transformation with unambiguous instructions.",
+  minimal: "A very small reasoning budget is sufficient for a straightforward task.",
+  low: "A well-scoped task with a known approach and few decisions.",
+  medium: "Substantive technical work needing planning and checks.",
+  high: "Difficult multi-step analysis or implementation with meaningful tradeoffs.",
+  xhigh: "Demanding analysis, conflicting evidence, or exacting requirements justifies extra depth.",
+  max: "The hardest unresolved problems, where maximum depth matters more than latency or usage. Not a routine default.",
+};
+
+export function describeChoice(profile: ModelProfile, thinkingLevel: ModelThinkingLevel): string {
+  return `Model profile: ${profile.role}\nEffort profile: ${EFFORT[thinkingLevel]}`;
+}
 
 export const DEFAULT_PROFILES: readonly ModelProfile[] = [
   {

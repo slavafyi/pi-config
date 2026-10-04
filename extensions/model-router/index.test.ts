@@ -177,6 +177,33 @@ test("matching recommendations are saved after delivery without a card", async (
   assert.match(h.notifications.at(-1)!.text, /Last recommendation/);
 });
 
+test("status puts the selected pair on the Last recommendation line", async (t) => {
+  const h = setup(t);
+  await h.submit("Fix a typo");
+  await h.command("status");
+  const text = h.notifications.at(-1)!.text;
+  assert.match(text, /Last recommendation: openai-codex\/gpt-6-luna \/ low/);
+  assert.doesNotMatch(text, /Last recommendation:\s*\n/);
+  assert.doesNotMatch(text, /Model recommendation:/);
+});
+
+test("old contradictory explanations are displayed as the chosen pair's current profile", async (t) => {
+  const h = setup(t);
+  await h.submit("Fix a typo");
+  const recommendation = { ...h.entries[0].data.recommendation, thinkingLevel: "off", explanation: "Substantive engineering within an understood system; stronger model escalation is not inherently required." };
+  const id = h.session.appendCustomEntry(ENTRY_TYPE, { recommendation, display: true });
+  const stored = h.session.getEntry(id)!;
+  h.start();
+  await h.command("status");
+  const text = h.notifications.at(-1)!.text;
+  assert.match(text, /Model profile: Efficient execution/);
+  assert.match(text, /Effort profile: No reasoning needed/);
+  assert.doesNotMatch(text, /Substantive engineering/);
+  const component = h.renderers.get(ENTRY_TYPE)!(stored, {}, { fg: (_color: string, value: string) => value });
+  assert.doesNotMatch(component.render(100).join("\n"), /Substantive engineering/);
+  assert.equal((stored as any).data.recommendation.explanation, recommendation.explanation);
+});
+
 test("cards wrap within padded margins and do not duplicate the current-model label", async (t) => {
   const h = setup(t);
   h.classify = async (_model, context) => response(context, "gpt-6.1-sol", "high");
@@ -199,7 +226,7 @@ test("cards wrap within padded margins and do not duplicate the current-model la
 
 test("acknowledgements, slash commands, extension input, and non-UI runs do not classify", async (t) => {
   const h = setup(t);
-  for (const text of ["давай", "окей", "continue", "", "/plan", "/skill:review task"]) await h.submit(text);
+  for (const text of ["давай", "окей", "continue", "вот вот", "ну типа", "хах", "", "/plan", "/skill:review task"]) await h.submit(text);
   await h.submit("Execute this task", { source: "extension" });
   h.ctx.hasUI = false;
   await h.submit("Real task in print mode");
@@ -321,12 +348,12 @@ test("reload and tree navigation restore only the active branch's latest valid r
   h.install();
   h.start();
   await h.command("status");
-  assert.match(h.notifications.at(-1)!.text, /Last recommendation:\nModel recommendation: openai-codex\/gpt-6-astra/);
+  assert.match(h.notifications.at(-1)!.text, /Last recommendation: openai-codex\/gpt-6-astra/);
   h.session.branch(firstId);
   h.session.appendCustomEntry(ENTRY_TYPE, { recommendation: { version: 1 }, display: true });
   await h.handlers.get("session_tree")?.({}, h.ctx);
   await h.command("status");
-  assert.match(h.notifications.at(-1)!.text, /Last recommendation:\nModel recommendation: openai-codex\/gpt-6-luna/);
+  assert.match(h.notifications.at(-1)!.text, /Last recommendation: openai-codex\/gpt-6-luna/);
   assert.equal(h.renderers.get(ENTRY_TYPE)!(h.session.getBranch().at(-1), {}, {}), undefined);
 });
 

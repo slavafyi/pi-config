@@ -91,8 +91,8 @@ test("context sends bounded user/assistant text, never system, tools, reasoning,
 });
 
 test("short acknowledgements are skipped, but short real tasks are not", () => {
-  for (const text of ["окей!", "Да.", "continue", "Go ahead!", "спасибо", "продолжай…"]) assert.ok(isContinuation(text), text);
-  for (const text of ["fix typo", "давай исправим", "review", "почему?", "yes, but use Astra"]) assert.equal(isContinuation(text), false, text);
+  for (const text of ["окей!", "Да.", "continue", "Go ahead!", "спасибо", "продолжай…", "вот вот", "вот-вот!", "ну типа", "хах"]) assert.ok(isContinuation(text), text);
+  for (const text of ["fix typo", "давай исправим", "review", "почему?", "yes, but use Astra", "вот что надо исправить", "ну типа реализуй функцию"]) assert.equal(isContinuation(text), false, text);
 });
 
 test("validation rejects unknown models, unsupported thinking, and empty explanations", () => {
@@ -119,15 +119,37 @@ test("Jev adapter uses Pi classification, cancellation, usage, and deterministic
   const result = await evaluator.evaluate(task, [candidate], signal);
   assert.equal(result.decision.model, "gpt-6.1-sol");
   assert.equal(result.decision.thinkingLevel, "medium");
-  assert.match(result.decision.explanation, /Substantive engineering/);
+  assert.match(result.decision.explanation, /Model profile: Default model for substantive engineering/);
+  assert.match(result.decision.explanation, /Effort profile: Substantive technical work/);
   assert.equal(result.usage?.totalTokens, 135);
   assert.equal(seenOptions.signal, signal);
+});
+
+test("Jev uses one choice and binds its description to the selected model and effort", async () => {
+  const luna: Candidate = { ...DEFAULT_PROFILES[0]!, thinkingLevels: ["off", "low"] };
+  let request: any;
+  const evaluator = evaluatorFor(choiceResult("route_0", "engineering"), (context) => { request = context; });
+  const result = await evaluator.evaluate(task, [luna], new AbortController().signal);
+  assert.deepEqual(Object.keys(request.questions), ["route"]);
+  assert.equal(result.decision.model, "gpt-6-luna");
+  assert.equal(result.decision.thinkingLevel, "off");
+  assert.match(result.decision.explanation, /Model profile: Efficient execution/);
+  assert.match(result.decision.explanation, /Effort profile: No reasoning needed/);
+  assert.doesNotMatch(result.decision.explanation, /Substantive engineering/);
+});
+
+test("effort descriptions do not refer to a different model", async () => {
+  const astra: Candidate = { ...DEFAULT_PROFILES[2]!, thinkingLevels: ["medium"] };
+  const result = await evaluatorFor(choiceResult("route_0")).evaluate(task, [astra], new AbortController().signal);
+  assert.equal(result.decision.model, "gpt-6-astra");
+  assert.match(result.decision.explanation, /Effort profile: Substantive technical work/);
+  assert.doesNotMatch(result.decision.explanation, /\bSol\b/);
 });
 
 test("Jev rejects failed, malformed, and unknown answers instead of guessing", async () => {
   for (const result of [
     { ...choiceResult(), stopReason: "error", errorMessage: "SECRET_ERROR" },
-    { ...choiceResult(), answers: {} }, choiceResult("unknown"), choiceResult("route_1", "unknown"),
+    { ...choiceResult(), answers: {} }, choiceResult("unknown"),
   ]) {
     await assert.rejects(evaluatorFor(result).evaluate(task, [candidate], new AbortController().signal));
   }

@@ -7,10 +7,16 @@ import { isContinuation, recommend } from "./advisor.ts";
 import { buildTaskContext } from "./context.ts";
 import { differsFromCurrent, formatRecommendation, readRecommendation } from "./core.ts";
 import { createJevEvaluator } from "./jev.ts";
-import { collectCandidates } from "./profiles.ts";
+import { collectCandidates, describeChoice } from "./profiles.ts";
 import type { Recommendation } from "./types.ts";
 
 const ENTRY_TYPE = "model-router-recommendation";
+const LEGACY_EXPLANATIONS = new Set([
+  "Focused work with clear constraints and a directly checkable result.",
+  "Substantive engineering within an understood system; stronger model escalation is not inherently required.",
+  "Conflicting evidence or demanding requirements justify deeper reasoning within the selected model.",
+  "Unresolved failures or consequential novel decisions justify the strongest available judgment.",
+]);
 interface RecommendationEntry {
   recommendation: Recommendation;
   display?: boolean;
@@ -31,6 +37,16 @@ export default function modelRouter(pi: ExtensionAPI) {
   let pending: AbortController | undefined;
   let queuedAdvice: AdviceJob[] = [];
   let deliveredAdvice: AdviceJob | undefined;
+
+  function withProfileDescription(recommendation: Recommendation): Recommendation {
+    if (!LEGACY_EXPLANATIONS.has(recommendation.explanation)) return recommendation;
+    const profile = config?.profiles.find((item) => item.provider === recommendation.provider && item.model === recommendation.model);
+    return {
+      ...recommendation,
+      explanation: profile ? describeChoice(profile, recommendation.thinkingLevel)
+        : `Legacy task category (not an explanation of this choice): ${recommendation.explanation}`,
+    };
+  }
 
   function cancel() {
     generation += 1;
@@ -58,8 +74,9 @@ export default function modelRouter(pi: ExtensionAPI) {
 
   pi.registerEntryRenderer<RecommendationEntry>(ENTRY_TYPE, (entry, _options, theme) => {
     if (!entry.data?.display) return undefined;
-    const recommendation = readRecommendation(entry.data.recommendation);
-    if (!recommendation) return undefined;
+    const stored = readRecommendation(entry.data.recommendation);
+    if (!stored) return undefined;
+    const recommendation = withProfileDescription(stored);
     return new Text(
       `${theme.fg("accent", `Model recommendation: ${recommendation.model} / ${recommendation.thinkingLevel}`)}\n${theme.fg("muted", recommendation.explanation)}`,
       1, 0,
@@ -75,7 +92,7 @@ export default function modelRouter(pi: ExtensionAPI) {
       if (entry.type !== "custom" || entry.customType !== ENTRY_TYPE) continue;
       const data = entry.data as RecommendationEntry | undefined;
       const recommendation = readRecommendation(data?.recommendation);
-      if (recommendation) last = recommendation;
+      if (recommendation) last = withProfileDescription(recommendation);
     }
   }
 
@@ -171,7 +188,7 @@ export default function modelRouter(pi: ExtensionAPI) {
         await check(command.slice(6).trim(), ctx, false, true);
       } else if (!command || command === "status") {
         const state = config ? `Model advisor: ${enabled ? "on" : "off"}. Evaluator: ${config.evaluator.provider}/${config.evaluator.model}.` : "Model advisor: not configured or invalid configuration.";
-        const recommendation = last ? `\n\nLast recommendation:\n${formatRecommendation(last)}` : "\nNo recommendation on this session branch.";
+        const recommendation = last ? `\n\n${formatRecommendation(last, "Last recommendation")}` : "\nNo recommendation on this session branch.";
         const usage = last?.usage ? `\nClassifier tokens: ${last.usage.totalTokens} (separate from the generation model).` : "";
         const failure = lastCheckFailed ? "\nThe latest check failed; any recommendation above is from an earlier check." : "";
         ctx.ui.notify(state + recommendation + usage + failure, "info");

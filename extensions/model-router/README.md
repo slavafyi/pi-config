@@ -34,8 +34,9 @@ standalone card even while automatic advice is off.
   These commands do not write configuration. Session start and `/reload` restore
   the configured setting.
 
-Common English and Russian acknowledgements such as `continue`, `окей`, and
-`продолжай` keep the previous recommendation without another classification.
+Common English and Russian acknowledgements such as `continue`, `окей`,
+`продолжай`, `вот вот`, `ну типа`, and `хах` keep the previous recommendation
+without another classification.
 Short substantive tasks are not skipped just because they are short. Slash
 commands, extension-generated input, tool continuations, and non-UI runs do not
 trigger automatic advice. Queued steering/follow-up input is assessed when it
@@ -120,8 +121,15 @@ redacted. Review the classifier provider's data policy before enabling advice.
 The serialized classifier request, including model/effort descriptions, is
 limited to 28,000 UTF-8 bytes. Oversized requests fail open without sending the
 classification. Long tasks are assessed from excerpts, which can miss important
-requirements. An explanation is a selected rationale category, not a generated
-account of the classifier's internal reasoning or an accuracy guarantee.
+requirements. Jev selects only the model/effort pair. The displayed `Model
+profile` and `Effort profile` describe the selected pair's configured purpose;
+they are not a task-specific justification or the classifier's internal
+reasoning. No independent rationale category is selected.
+
+`/router` puts the pair directly after `Last recommendation:` on the same line.
+Old independent rationale categories are replaced for display by the matching
+configured profile, or explicitly labelled as legacy when that profile is no
+longer configured. Stored choices, usage, and history are not rewritten.
 
 Classifier calls can be billed separately from generation. Reported usage is
 stored with the recommendation, and `/router` shows its token count. These

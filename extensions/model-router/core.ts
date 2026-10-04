@@ -31,9 +31,9 @@ export function differsFromCurrent(recommendation: Recommendation): boolean {
     recommendation.thinkingLevel !== recommendation.current.thinkingLevel;
 }
 
-export function formatRecommendation(recommendation: Recommendation): string {
+export function formatRecommendation(recommendation: Recommendation, label = "Model recommendation"): string {
   return [
-    `Model recommendation: ${recommendation.provider}/${recommendation.model} / ${recommendation.thinkingLevel}`,
+    `${label}: ${recommendation.provider}/${recommendation.model} / ${recommendation.thinkingLevel}`,
     recommendation.explanation,
     `Current: ${recommendation.current.provider}/${recommendation.current.model} / ${recommendation.current.thinkingLevel}. No settings changed.`,
   ].join("\n");

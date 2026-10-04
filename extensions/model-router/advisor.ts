@@ -4,7 +4,7 @@ import { evaluateWithDeadline } from "./evaluate.ts";
 
 export function isContinuation(text: string): boolean {
   const normalized = text.trim().toLowerCase().replace(/[.!?,;:…]+$/u, "").trim();
-  return /^(ok|okay|yes|yep|sure|thanks|thank you|continue|go ahead|proceed|да|ага|угу|ок|окей|хорошо|спасибо|продолжай|продолжи|дальше|давай)$/u.test(normalized);
+  return /^(ok|okay|yes|yep|sure|thanks|thank you|continue|go ahead|proceed|да|ага|угу|ок|окей|хорошо|спасибо|продолжай|продолжи|дальше|давай|вот[- ]вот|ну типа|хах)$/u.test(normalized);
 }
 
 export async function recommend(options: {
