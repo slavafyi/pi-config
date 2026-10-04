@@ -52,7 +52,9 @@ semantic status with the current theme without making another request.
 
 OpenAI shows every reported Codex window, with the five-hour window first.
 Missing credentials show `OpenAI: unavailable` without interrupting Pi.
-Unsupported Pi providers clear the status.
+Unsupported Pi providers clear the status. This includes the `openai` provider:
+Sign in with ChatGPT uses subscription-sharing limits, so this extension does
+not label the legacy Codex quota as the active OpenAI subscription quota.
 
 ## Tokens
 
