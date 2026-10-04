@@ -107,15 +107,6 @@ Extension-specific settings are namespaced under `extensions` in
 `user-settings.json`. An extension remains inactive when its required section
 or key is absent.
 
-The model advisor is enabled in `user-settings.json`. Set `TYPESAFE_API_KEY`
-in the shell that starts Pi and run `/reload`. `/router` shows its latest
-recommendation, `/router check <task>` evaluates a task explicitly, and
-`/router off` disables automatic advice for the current session. It recommends
-Luna 6, Sol 6.1, or Astra 6 with catalog-supported thinking levels, but never
-changes your selection. Classifier calls send bounded conversation excerpts
-and are billed separately; see [Model Router](extensions/model-router/README.md)
-for privacy, cost-accounting limitations, configuration, and sequential tests.
-
 ## Packages
 
 Packages are declared in `settings.json` and pinned to immutable git commits or exact npm versions.
