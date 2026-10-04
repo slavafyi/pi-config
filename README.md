@@ -99,12 +99,22 @@ Run `/reload` in existing sessions to enable codemode.
 | `tool-output-limit` | Independent configurable limits for direct bash, grep, and text read output; nested calls bypass these limits |
 | `footer` | Responsive project, model, extension-status, quota, cache, context, and cost footer |
 | `plan-mode` | Read-only planning with cache-preserving execution transitions |
+| `model-router` | Jev recommendations for OpenAI Codex models and thinking, without switching |
 | `usage` | Codex quota status |
 | `subagent-policy` | Automatic delegation policy with foreground execution by default |
 
 Extension-specific settings are namespaced under `extensions` in
 `user-settings.json`. An extension remains inactive when its required section
 or key is absent.
+
+The model advisor is enabled in `user-settings.json`. Set `TYPESAFE_API_KEY`
+in the shell that starts Pi and run `/reload`. `/router` shows its latest
+recommendation, `/router check <task>` evaluates a task explicitly, and
+`/router off` disables automatic advice for the current session. It recommends
+Luna 6, Sol 6.1, or Astra 6 with catalog-supported thinking levels, but never
+changes your selection. Classifier calls send bounded conversation excerpts
+and are billed separately; see [Model Router](extensions/model-router/README.md)
+for privacy, cost-accounting limitations, configuration, and sequential tests.
 
 ## Packages
 
