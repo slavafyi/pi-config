@@ -6,6 +6,7 @@ import { FOOTER_INVALIDATE_EVENT } from "../footer/events.ts";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
 const PLAN_MODE_MUTATING_TOOLS = new Set(["edit", "write"]);
+const MAX_STEP_LABEL_WIDTH = 50;
 
 export const MODE_GUARD_PROMPT =
 	"The latest extension-generated plan-mode state message controls the current mode. Treat older plan-mode state messages as historical context.";
@@ -51,7 +52,7 @@ function planRows(lines: readonly string[], ellipses: readonly string[]): Compon
 		render(width) {
 			return lines.map((line, index) => width <= 2
 				? truncateToWidth(line, width, ellipses[index])
-				: ` ${truncateToWidth(line, width - 2, ellipses[index], true)} `);
+				: ` ${truncateToWidth(line, width - 2, ellipses[index])} `);
 		},
 		invalidate() {},
 	};
@@ -79,7 +80,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		const data = entry.data as PlanCompleteData | undefined;
 		const lines = [theme.fg("success", theme.bold("✓ Plan Complete"))];
 		for (const item of data?.items ?? []) {
-			lines.push(`${theme.fg("success", "✓ ")}${theme.fg("muted", item)}`);
+			lines.push(`${theme.fg("success", "✓ ")}${theme.fg("muted", truncateToWidth(item, MAX_STEP_LABEL_WIDTH, "..."))}`);
 		}
 		return planRows(lines, [
 			theme.fg("success", theme.bold("...")),
@@ -128,7 +129,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 		if (executionMode && todoItems.length > 0) {
 			const lines = todoItems.map((item) => {
-				const label = item.text;
+				const label = ctx.mode === "tui" ? truncateToWidth(item.text, MAX_STEP_LABEL_WIDTH, "...") : item.text;
 				if (item.completed) {
 					return (
 						ctx.ui.theme.fg("success", "✓ ") + ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(label))

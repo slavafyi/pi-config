@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { stripVTControlCharacters } from "node:util";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 import planMode, { MODE_GUARD_PROMPT } from "./index.ts";
 
@@ -362,7 +363,7 @@ test("keeps full plan instructions in persistence, execution, resume, and comple
 	assert.deepEqual(completion[0].data.items, [fullStep]);
 });
 
-test("renders one row per step at the current terminal width without shortening saved text", async () => {
+test("caps step labels at 50 columns while fitting narrow terminals without shortening saved text", async () => {
 	const step = `Check Unicode and the full instruction: ${"界😀".repeat(30)} end`;
 	const harness = createHarness();
 	harness.ctx.ui.theme.fg = (_tone, text) => `\x1b[36m${text}\x1b[0m`;
@@ -373,11 +374,14 @@ test("renders one row per step at the current terminal width without shortening 
 	for (const width of [0, 1, 2, 5, 40, 80, 240]) {
 		const lines = harness.renderWidget(width)!;
 		assert.equal(lines.length, 1);
-		assert.ok(visibleWidth(lines[0]) <= width);
+		assert.ok(visibleWidth(lines[0]) <= Math.min(width, 54));
 	}
-	assert.ok(harness.renderWidget(240)?.[0]?.includes(step));
+	const label = truncateToWidth(step, 50, "...");
+	assert.ok(stripVTControlCharacters(harness.renderWidget(240)![0]).includes(stripVTControlCharacters(label)));
 	assert.ok(!harness.renderWidget(80)?.[0]?.includes(step));
-	assert.ok(harness.renderWidget(240)?.[0]?.includes(step), "resize must not retain a previously truncated label");
+	assert.deepEqual(harness.renderWidget(240), harness.renderWidget(80));
+	harness.renderWidget(20);
+	assert.ok(stripVTControlCharacters(harness.renderWidget(240)![0]).includes(stripVTControlCharacters(label)), "resize must restore the 50-column label");
 
 	const done = { role: "assistant", content: [{ type: "text", text: "[DONE:1]" }] };
 	await harness.endMessage({ message: done });
@@ -396,10 +400,28 @@ test("renders one row per step at the current terminal width without shortening 
 	for (const width of [0, 1, 2, 5, 40, 80, 240]) {
 		const lines = component.render(width);
 		assert.equal(lines.length, 2);
-		assert.ok(lines.every((line: string) => visibleWidth(line) <= width));
+		assert.ok(lines.every((line: string) => visibleWidth(line) <= Math.min(width, 54)));
 	}
-	assert.ok(component.render(240)[1].includes(step));
+	assert.ok(stripVTControlCharacters(component.render(240)[1]).includes(stripVTControlCharacters(label)));
 	assert.ok(!component.render(80)[1].includes(step));
+	assert.deepEqual(component.render(240), component.render(80));
+});
+
+test("keeps 50-column labels intact and truncates longer labels", async () => {
+	const steps = ["x".repeat(50), "y".repeat(51)];
+	const harness = createHarness([{ type: "custom", customType: "plan-mode", data: {
+		enabled: false, executing: true,
+		todos: steps.map((text, index) => ({ step: index + 1, text, completed: false })),
+	} }]);
+	harness.ctx.ui.theme.fg = (_tone, text) => text;
+	await harness.handlers.get("session_start")?.({}, harness.ctx);
+	const expected = [` ○ ${steps[0]} `, ` ○ ${"y".repeat(47)}... `];
+	assert.deepEqual(harness.renderWidget(240)?.map(stripVTControlCharacters), expected);
+	const component = harness.entryRenderers.get("plan-complete")!({ data: { items: steps } }, {}, {
+		bold: (text: string) => text,
+		fg: (_tone: string, text: string) => text,
+	});
+	assert.deepEqual(component.render(240).slice(1).map(stripVTControlCharacters), expected.map(line => line.replace("○", "✓")));
 });
 
 test("keeps muted and strikethrough styles on truncation ellipses", async () => {

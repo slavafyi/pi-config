@@ -55,7 +55,7 @@ instructions in context.
 - Plan-mode restrictions are inactive; the normal active-tool configuration applies
 - Agent executes steps in order
 - `[DONE:n]` markers track completion
-- Widget shows one line per step, shortened to the current terminal width; saved steps, `/todos`, and execution context retain the full text
+- Widget shows one line per step, with labels limited to 50 terminal columns and shortened further in narrow terminals; saved steps, `/todos`, and execution context retain the full text
 - Completed plans use the same width-aware single-line labels, with full text stored in their data
 
 Resizing the terminal recalculates label widths without wrapping steps. The
