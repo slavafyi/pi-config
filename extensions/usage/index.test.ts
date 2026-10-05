@@ -357,10 +357,10 @@ test("binds response headers to the outgoing Codex account without blocking", as
   }
 });
 
-test("unsupported providers do not fetch or resolve auth and clear Codex status", async (t) => {
+test("OpenAI subscription clears Codex quota without fetching or resolving auth", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   const fetchMock = t.mock.method(globalThis, "fetch", async () => new Response(report));
-  const state = await setup({ provider: "unsupported" });
+  const state = await setup({ provider: "openai" });
   const authMock = t.mock.method(state.ctx.modelRegistry, "getProviderAuth");
   const execMock = t.mock.method(state.pi, "exec");
   assert.equal(state.handlers.has("message_end"), false);
@@ -380,7 +380,7 @@ test("unsupported providers do not fetch or resolve auth and clear Codex status"
   assert.equal(fetchMock.mock.callCount(), 1);
   assert.equal(authMock.mock.callCount(), 1);
 
-  state.ctx.model.provider = "unsupported";
+  state.ctx.model.provider = "openai";
   state.handlers.get("model_select")?.({}, state.ctx);
   state.handlers.get("turn_end")?.({}, state.ctx);
   await flushPromises();

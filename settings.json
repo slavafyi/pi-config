@@ -7,13 +7,13 @@
   "codemode": {
     "mode": "on"
   },
-  "defaultProvider": "openai-codex",
+  "defaultProvider": "openai",
   "defaultModel": "gpt-6.1-sol",
   "editorPaddingX": 1,
   "packages": [
     "git:github.com/ttttmr/pi-wakatime@c5e82040aea0a78aba176dc6646d5eedb0f22888",
     "git:github.com/ShpetimA/pi-fff@bb35f3659f3090534c859223200feafb2897a2a6",
-    "git:github.com/ronind/pi-openai-server-compaction@d5131a2652d47af7f608a57cd5c306411bf65cf4",
+    "git:github.com/ronind/pi-openai-server-compaction@62a918dd9cb8eae74426caa334c4289d7641e81a",
     "git:github.com/edxeth/pi-auto-session-titles@53edd291cb53daa09ec099df73cb77a4e1e74b89",
     "git:github.com/yusukeshib/pi-datetime@8ce467f64d4ff374535bdd8e46fa3b8de824ac87",
     "git:github.com/peterp/pi-sidequest@0d10f4481b2cf4b770266e869aca95d41d6f2ab8",
@@ -28,7 +28,7 @@
   "quietStartup": true,
   "autoSessionTitles": {
     "enabled": true,
-    "provider": "openai-codex",
+    "provider": "openai",
     "model": "gpt-5.6-luna",
     "thinkingLevel": "low"
   },
