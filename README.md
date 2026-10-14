@@ -99,7 +99,7 @@ Run `/reload` in existing sessions to enable codemode.
 | `tool-output-limit` | Independent configurable limits for direct bash, grep, and text read output; nested calls bypass these limits |
 | `footer` | Responsive project, model, extension-status, quota, cache, context, and cost footer |
 | `plan-mode` | Read-only planning with cache-preserving execution transitions |
-| `next-prompt` | One next-message ghost suggestion from GPT-6 Luna; Tab inserts without sending |
+| `next-prompt` | One next-message ghost suggestion; Tab inserts without sending |
 | `usage` | Codex quota status |
 | `subagent-policy` | Automatic delegation policy with foreground execution by default |
 

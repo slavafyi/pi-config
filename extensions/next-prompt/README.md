@@ -1,6 +1,6 @@
 # Next Prompt
 
-A minimal Pi 1.2 extension that predicts the next message you might type after
+A minimal Pi extension that predicts the next message you might type after
 an agent run fully settles. It shows one dim suggestion in the empty editor.
 
 - **Tab** inserts the whole visible suggestion; **Enter** sends it separately.
