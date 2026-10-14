@@ -78,7 +78,10 @@ right block includes:
 - the latest assistant message's prompt-cache hit rate;
 - context usage from Pi's public context API;
 - total session cost, including assistant messages, tool results with usage,
-  compactions, branch summaries, and standalone usage entries such as cache warming.
+  compactions, branch summaries, standalone usage entries such as cache warming,
+  and the `next-prompt-usage` custom entries written by Next Prompt. These side
+  requests do not change the main assistant's cache-hit percentage. Native Pi
+  `/session` totals do not count these custom entries.
 
 After compaction, unknown context usage appears as `ctx:?/272k` until Pi receives
 a new model response.

@@ -23,6 +23,8 @@ export interface UsageLike {
 
 export interface SessionEntryLike {
   type: string;
+  customType?: string;
+  data?: unknown;
   message?: { role?: string; usage?: UsageLike };
   usage?: UsageLike;
 }
@@ -264,6 +266,9 @@ export function calculateSessionStats(entries: readonly SessionEntryLike[]): {
       }
     } else if ((entry.type === "usage" || entry.type === "compaction" || entry.type === "branch_summary") && validUsage(entry.usage)) {
       usage = entry.usage;
+    } else if (entry.type === "custom" && entry.customType === "next-prompt-usage" &&
+      entry.data && typeof entry.data === "object" && "usage" in entry.data && validUsage(entry.data.usage)) {
+      usage = entry.data.usage;
     }
     const total = usage?.cost?.total;
     if (typeof total === "number" && Number.isFinite(total)) cost += total;
