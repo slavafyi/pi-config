@@ -5,6 +5,10 @@ import {
 
 type GhostCapableEditor = EditorComponent & Partial<Pick<Editor, "isShowingAutocomplete">>;
 
+export function isAcceptKey(data: string): boolean {
+  return matchesKey(data, "tab") || matchesKey(data, "right");
+}
+
 /** Decorate the same editor instance: keep its history, autocomplete, shortcuts and footer wrappers. */
 export function decorateEditor(
   editor: GhostCapableEditor,
@@ -18,7 +22,7 @@ export function decorateEditor(
   const setText = editor.setText.bind(editor);
   const insert = editor.insertTextAtCursor?.bind(editor);
   let shown: string | undefined;
-  // Unknown custom editors cannot promise that Tab isn't owned by an autocomplete menu.
+  // Unknown custom editors cannot promise that acceptance keys aren't owned by autocomplete.
   const eligible = () => editor.getText() === "" && editor.isShowingAutocomplete?.() === false;
 
   editor.render = (width) => {
@@ -42,7 +46,7 @@ export function decorateEditor(
 
   editor.handleInput = (data) => {
     const suggestion = eligible() ? getSuggestion() : undefined;
-    const accept = matchesKey(data, "tab") && suggestion && shown === suggestion && insert;
+    const accept = isAcceptKey(data) && suggestion && shown === suggestion && insert;
     shown = undefined;
     cancel();
     if (accept) insert(suggestion);

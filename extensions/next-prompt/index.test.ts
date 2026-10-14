@@ -113,6 +113,12 @@ test("wraps the existing editor and composes with footer without replacing its i
   assert.match(stripTerminalSequences(lines[1]!), /давай добавим тесты/);
   assert.ok(lines[1]!.includes(CURSOR_MARKER));
   editor.handleInput("\t"); assert.equal(editor.getText(), "давай добавим тесты");
+  editor.setText("");
+  await f.emit("agent_settled", { aborted: false });
+  editor.render(80);
+  f.input("\x1b[C"); // Global listener runs before the focused editor.
+  editor.handleInput("\x1b[C");
+  assert.equal(editor.getText(), "давай добавим тесты");
 });
 
 test("all session boundaries clear suggestions, and raw input cancels pending generation", async (t) => {

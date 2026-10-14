@@ -3,10 +3,10 @@
 A minimal Pi extension that predicts the next message you might type after
 an agent run fully settles. It shows one dim suggestion in the empty editor.
 
-- **Tab** inserts the whole visible suggestion; **Enter** sends it separately.
+- **Tab** or **→** inserts the whole visible suggestion; **Enter** sends it separately.
 - Typing, pasting, Escape, or another action dismisses it. Deleting back to empty
   does not bring the old suggestion back.
-- Autocomplete keeps priority. Without a visible suggestion, Tab works normally.
+- Autocomplete keeps priority. Without a visible suggestion, both keys work normally.
 - The existing editor instance is decorated, preserving the footer, history,
   undo and application shortcuts. Unsupported custom editors keep normal input
   rather than accepting an invisible suggestion.
@@ -69,5 +69,5 @@ mise exec -- pnpm check
 ```
 
 Apply through the Stow step used by dotfiles' `setup_pi` (not handcrafted symlinks),
-then `/reload`. Check Tab/Enter, autocomplete, undo, history, footer, resize,
+then `/reload`. Check Tab/Right/Enter, autocomplete, undo, history, footer, resize,
 Russian/English, fullscreen and the hardware cursor in the TUI.

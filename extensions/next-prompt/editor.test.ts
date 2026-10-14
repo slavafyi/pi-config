@@ -56,6 +56,32 @@ test("Tab inserts the whole suggestion without submitting and undo restores empt
   assert.equal(f.editor.render(50).join("\n").includes("давай"), false);
 });
 
+test("Right inserts the whole visible suggestion without submitting, and undo restores empty input", () => {
+  const f = fixture();
+  let submissions = 0;
+  f.editor.onSubmit = () => { submissions++; };
+  f.editor.render(50);
+  f.editor.handleInput("\x1b[C");
+  assert.equal(f.editor.getText(), "давай добавим тесты");
+  assert.equal(submissions, 0);
+  f.editor.handleInput("\x1b[45;5u");
+  assert.equal(f.editor.getText(), "");
+});
+
+test("Right preserves cursor movement in a nonempty draft and never accepts an unseen ghost", () => {
+  const f = fixture();
+  f.editor.handleInput("\x1b[C"); // Not rendered yet: no visible suggestion to accept.
+  assert.equal(f.editor.getText(), "");
+  f.editor.setText("abc");
+  f.editor.handleInput("\x1b[D");
+  assert.equal(f.editor.getCursor().col, 2);
+  f.setSuggestion("new suggestion");
+  f.editor.render(50);
+  f.editor.handleInput("\x1b[C");
+  assert.equal(f.editor.getCursor().col, 3);
+  assert.equal(f.editor.getText(), "abc");
+});
+
 test("Enter never submits the unaccepted ghost", () => {
   const f = fixture();
   const submissions: string[] = [];
@@ -101,6 +127,7 @@ test("autocomplete has priority over ghost and Tab reaches the original handler"
   decorateEditor(base, () => "suggestion", () => {}, f.tui, (s) => s);
   assert.deepEqual(base.render(50), f.originalRender(50));
   base.handleInput("\t"); assert.equal(delegated, 1);
+  base.handleInput("\x1b[C"); assert.equal(delegated, 2);
   assert.equal(f.editor.getText(), "");
 });
 
@@ -131,4 +158,5 @@ test("no ghost is painted or accepted without a visible focused editor", () => {
   const f = fixture(); f.editor.focused = false;
   assert.deepEqual(f.editor.render(50), f.originalRender(50));
   f.editor.handleInput("\t"); assert.equal(f.editor.getText(), "");
+  f.editor.handleInput("\x1b[C"); assert.equal(f.editor.getText(), "");
 });

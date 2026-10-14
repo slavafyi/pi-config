@@ -16,7 +16,7 @@ const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
 let hasTmux = true;
 try { execFileSync("tmux", ["-V"], { stdio: "ignore" }); } catch { hasTmux = false; }
 
-test("real Pi TUI: ghost, Tab, Enter, dismissal, autocomplete, resize and reload", { skip: !hasTmux, timeout: 90_000 }, async (t) => {
+test("real Pi TUI: ghost, Tab/Right, Enter, dismissal, autocomplete, resize and reload", { skip: !hasTmux, timeout: 90_000 }, async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "pi-next-prompt-tui-"));
   const socket = `pi-next-prompt-test-${process.pid}`;
   const tmux = async (...args: string[]) => (await exec("tmux", ["-L", socket, ...args], { timeout: 10_000 })).stdout;
@@ -25,9 +25,9 @@ test("real Pi TUI: ghost, Tab, Enter, dismissal, autocomplete, resize and reload
     rmSync(directory, { recursive: true, force: true });
   });
 
-  for (const [mode, hardware, language] of [
-    ["regular", false, "en"], ["regular", true, "ru"],
-    ["fullscreen", false, "ru"], ["fullscreen", true, "en"],
+  for (const [mode, hardware, language, acceptKey] of [
+    ["regular", false, "en", "Tab"], ["regular", true, "ru", "Right"],
+    ["fullscreen", false, "ru", "Right"], ["fullscreen", true, "en", "Tab"],
   ] as const) {
     const name = `${mode}-${hardware ? "hardware" : "fake"}`;
     const cwd = join(directory, name);
@@ -78,8 +78,8 @@ test("real Pi TUI: ghost, Tab, Enter, dismissal, autocomplete, resize and reload
     assert.equal(inputs().length, 1);
     await type("check again"); await send("Enter");
     await waitFor(async () => (await pane()).includes(suggestion), "second ghost");
-    await send("Tab");
-    assert.equal(inputs().length, 2, "Tab must not send");
+    await send(acceptKey);
+    assert.equal(inputs().length, 2, `${acceptKey} must not send`);
     await send("Enter");
     await waitFor(() => inputs().length === 3, "accepted prompt submitted separately");
     assert.equal(inputs()[2].text, suggestion);

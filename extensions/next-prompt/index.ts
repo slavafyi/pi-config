@@ -1,9 +1,9 @@
 import { CustomEditor, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { isKeyRelease, matchesKey } from "@earendil-works/pi-tui";
+import { isKeyRelease } from "@earendil-works/pi-tui";
 import { loadExtensionSettings } from "../shared/user-settings.ts";
 import { PredictionController } from "./controller.ts";
 import { parseConfig, USAGE_ENTRY, type Config } from "./core.ts";
-import { decorateEditor } from "./editor.ts";
+import { decorateEditor, isAcceptKey } from "./editor.ts";
 
 type EditorFactory = NonNullable<ReturnType<ExtensionContext["ui"]["getEditorComponent"]>>;
 
@@ -36,7 +36,7 @@ export default function nextPrompt(pi: ExtensionAPI) {
     unsubscribe = ctx.ui.onTerminalInput((data) => {
       if (isKeyRelease(data)) return;
       // Acceptance belongs to the focused editor; other input also cancels work during dialogs.
-      if (!matchesKey(data, "tab") || !controller.suggestion) clear();
+      if (!isAcceptKey(data) || !controller.suggestion) clear();
       return undefined;
     });
   });
