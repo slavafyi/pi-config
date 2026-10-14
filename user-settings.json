@@ -7,6 +7,13 @@
     },
     "footer": {
       "showUnknownStatuses": false
+    },
+    "next-prompt": {
+      "enabled": true,
+      "model": {
+        "provider": "openai-codex",
+        "id": "gpt-6-luna"
+      }
     }
   }
 }

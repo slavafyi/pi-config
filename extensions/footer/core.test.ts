@@ -218,6 +218,18 @@ test("counts standalone usage without changing the latest assistant cache hit", 
   assert.equal(stats.cacheHitPercent, 90);
 });
 
+test("counts next-prompt side usage without changing the main model cache metric", () => {
+  const usage = { input: 10, output: 3, cacheRead: 90, cacheWrite: 0, cost: { total: 0.5 } };
+  const stats = calculateSessionStats([
+    { type: "message", message: { role: "assistant", usage } },
+    { type: "custom", customType: "next-prompt-usage", data: { usage: { ...usage, cacheRead: 0, cost: { total: 0.2 } } } },
+    { type: "custom", customType: "unrelated", data: { usage } },
+    { type: "custom", customType: "next-prompt-usage", data: { usage: { input: -1 } } },
+  ]);
+  assert.equal(stats.cost, 0.7);
+  assert.equal(stats.cacheHitPercent, 90);
+});
+
 test("renders wide, compact, narrow, and minimal layouts by measured width", () => {
   const wide = renderFooter(input(), 180, tools);
   assert.match(wide[0]!, /^7d:94% ↺5d13h  MCP:0\/2  agents:2  ⏸︎ plan\s+/);
