@@ -73,7 +73,7 @@ test("real Pi TUI: ghost, Tab/Right, Enter, dismissal, autocomplete, resize and 
     await tmux("resize-window", "-t", name, "-x", "80", "-y", "24");
     await waitFor(async () => (await pane()).includes(suggestion), "resize restore");
 
-    await send("Enter"); // Empty input must not submit the ghost.
+    await send("Enter");
     await waitFor(async () => !(await pane()).includes(suggestion), "Enter dismisses unaccepted ghost");
     assert.equal(inputs().length, 1);
     await type("check again"); await send("Enter");

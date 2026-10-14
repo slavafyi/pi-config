@@ -35,7 +35,6 @@ export default function nextPrompt(pi: ExtensionAPI) {
     if (!config) return;
     unsubscribe = ctx.ui.onTerminalInput((data) => {
       if (isKeyRelease(data)) return;
-      // Acceptance belongs to the focused editor; other input also cancels work during dialogs.
       if (!isAcceptKey(data) || !controller.suggestion) clear();
       return undefined;
     });

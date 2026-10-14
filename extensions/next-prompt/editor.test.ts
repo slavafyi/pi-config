@@ -70,7 +70,7 @@ test("Right inserts the whole visible suggestion without submitting, and undo re
 
 test("Right preserves cursor movement in a nonempty draft and never accepts an unseen ghost", () => {
   const f = fixture();
-  f.editor.handleInput("\x1b[C"); // Not rendered yet: no visible suggestion to accept.
+  f.editor.handleInput("\x1b[C");
   assert.equal(f.editor.getText(), "");
   f.editor.setText("abc");
   f.editor.handleInput("\x1b[D");

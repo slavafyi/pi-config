@@ -116,7 +116,7 @@ test("wraps the existing editor and composes with footer without replacing its i
   editor.setText("");
   await f.emit("agent_settled", { aborted: false });
   editor.render(80);
-  f.input("\x1b[C"); // Global listener runs before the focused editor.
+  f.input("\x1b[C");
   editor.handleInput("\x1b[C");
   assert.equal(editor.getText(), "давай добавим тесты");
 });

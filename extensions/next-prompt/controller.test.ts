@@ -133,7 +133,6 @@ test("late output is discarded after draft, leaf, session, active-model or idle 
 test("a newer request wins even when the older transport ignores abort", async () => {
   const f = fixture(); f.controller.request(f.ctx, config);
   const oldResolve = f.resolve;
-  // Capture the first resolver independently of fixture's mutable resolver.
   let secondResolve!: (value: any) => void;
   f.ctx.modelRegistry.streamSimple = (model: any, context: any, options: any) => {
     f.calls.push({ model, context, options });

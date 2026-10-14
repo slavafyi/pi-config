@@ -35,7 +35,7 @@ export class PredictionController {
     try {
       return this.isCurrent(ready.source) ? ready.text : undefined;
     } catch {
-      return undefined; // Context may have been invalidated by reload or a session switch.
+      return undefined;
     }
   }
 
@@ -79,8 +79,7 @@ export class PredictionController {
     const { ctx } = source;
     if (!this.isEligible(ctx) || ctx.sessionManager.getSessionId() !== source.sessionId ||
       ctx.model?.provider !== source.modelProvider || ctx.model?.id !== source.modelId) return false;
-    // Accounting may finish out of order. Only our non-context usage entries are transparent;
-    // a new message, context edit, or different branch still invalidates the prediction.
+    // Late usage entries advance the journal without changing prediction context.
     let leafId = ctx.sessionManager.getLeafId();
     while (leafId !== source.leafId) {
       if (!leafId) return false;
@@ -100,7 +99,7 @@ export class PredictionController {
       }, {
         signal: abort.signal,
         reasoning: "minimal",
-        // Stateless side request: never use the main Codex WebSocket conversation.
+        // Keep side requests out of the main Codex WebSocket conversation.
         transport: "sse",
       }).result();
       const current = generation === this.generation && !abort.signal.aborted && this.isCurrent(source);
@@ -112,7 +111,6 @@ export class PredictionController {
       this.ready = { text, source };
       this.onChange();
     } catch {
-      // Suggestions are optional: transport errors and invalidated contexts must not interrupt input.
     } finally {
       if (this.abort === abort) {
         this.abort = undefined;

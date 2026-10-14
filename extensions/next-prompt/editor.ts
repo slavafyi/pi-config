@@ -9,7 +9,6 @@ export function isAcceptKey(data: string): boolean {
   return matchesKey(data, "tab") || matchesKey(data, "right");
 }
 
-/** Decorate the same editor instance: keep its history, autocomplete, shortcuts and footer wrappers. */
 export function decorateEditor(
   editor: GhostCapableEditor,
   getSuggestion: () => string | undefined,
@@ -22,7 +21,7 @@ export function decorateEditor(
   const setText = editor.setText.bind(editor);
   const insert = editor.insertTextAtCursor?.bind(editor);
   let shown: string | undefined;
-  // Unknown custom editors cannot promise that acceptance keys aren't owned by autocomplete.
+  // Without an autocomplete API, don't intercept the editor's keys.
   const eligible = () => editor.getText() === "" && editor.isShowingAutocomplete?.() === false;
 
   editor.render = (width) => {

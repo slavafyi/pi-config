@@ -61,7 +61,6 @@ export function buildTranscript(entries: readonly EntryLike[]): string {
 }
 
 export function parseSuggestion(reply: string): string | undefined {
-  // Never put model-generated terminal controls or invisible formatting into the editor.
   if (/[\p{Cc}\p{Cf}]/u.test(reply.replace(/\n/g, ""))) return undefined;
   const text = reply.trim();
   if (!text || text.includes("NO_PREDICTION") || /[\n`]/u.test(text) ||
