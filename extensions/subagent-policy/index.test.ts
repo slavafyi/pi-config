@@ -52,6 +52,12 @@ assert.equal(handlers.has("tool_call"), false);
 const firstStart = handlers.get("before_agent_start")?.({ systemPrompt: "base" }, ctx);
 assert.deepEqual(firstStart, { systemPrompt: `base\n\n${SUBAGENT_POLICY_PROMPT}` });
 assert.doesNotMatch(firstStart.systemPrompt, /Parent context remaining/);
+assert.deepEqual(handlers.get("before_agent_start")?.({
+  type: "before_agent_start",
+  messageType: "custom",
+  message: { customType: "test-follow-up", content: "Continue", display: false },
+  systemPrompt: "base",
+}, ctx), firstStart);
 
 const stableMessages = [{ role: "user", content: "task", timestamp: 1 }];
 const firstContext = handlers.get("context")?.({ messages: stableMessages }, ctx);

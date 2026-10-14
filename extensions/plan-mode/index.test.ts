@@ -136,6 +136,20 @@ function createHarness(initialEntries: any[] = [], activeBranch?: any[]) {
 	};
 }
 
+test("keeps the mode guard and plan state on Pi 1.2 custom-message starts", async () => {
+	const harness = createHarness();
+	await harness.handlers.get("session_start")?.({}, harness.ctx);
+	await harness.commands.get("plan")?.("", harness.ctx);
+	const result = await harness.handlers.get("before_agent_start")?.({
+		type: "before_agent_start",
+		messageType: "custom",
+		message: { customType: "test-follow-up", content: "Continue", display: false },
+		systemPrompt: "base",
+	}, harness.ctx);
+	assert.equal(result.systemPrompt, `base\n\n${MODE_GUARD_PROMPT}`);
+	assert.equal(result.message.customType, "plan-mode-context");
+});
+
 test("publishes only plan state transitions while preserving progress UI", async () => {
 	const harness = createHarness();
 	const {
