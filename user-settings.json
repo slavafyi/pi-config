@@ -7,15 +7,6 @@
     },
     "footer": {
       "showUnknownStatuses": false
-    },
-    "model-router": {
-      "enabled": true,
-      "evaluator": {
-        "type": "jev",
-        "provider": "typesafe",
-        "model": "jev-latest"
-      },
-      "timeoutMs": 2000
     }
   }
 }
