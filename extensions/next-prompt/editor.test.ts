@@ -4,6 +4,8 @@ import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import { CURSOR_MARKER, KeybindingsManager, TUI_KEYBINDINGS, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { decorateEditor } from "./editor.ts";
 
+const KITTY_CTRL_MINUS_UNDO = "\x1b[45;5u";
+
 function fixture() {
   let suggestion: string | undefined = "давай добавим тесты";
   let renders = 0;
@@ -51,7 +53,7 @@ test("Tab inserts the whole suggestion without submitting and undo restores empt
   f.editor.handleInput("\t");
   assert.equal(f.editor.getText(), "давай добавим тесты");
   assert.equal(submissions, 0);
-  f.editor.handleInput("\x1b[45;5u"); // Kitty ctrl+-: Pi's default undo binding.
+  f.editor.handleInput(KITTY_CTRL_MINUS_UNDO);
   assert.equal(f.editor.getText(), "");
   assert.equal(f.editor.render(50).join("\n").includes("давай"), false);
 });
@@ -64,7 +66,7 @@ test("Right inserts the whole visible suggestion without submitting, and undo re
   f.editor.handleInput("\x1b[C");
   assert.equal(f.editor.getText(), "давай добавим тесты");
   assert.equal(submissions, 0);
-  f.editor.handleInput("\x1b[45;5u");
+  f.editor.handleInput(KITTY_CTRL_MINUS_UNDO);
   assert.equal(f.editor.getText(), "");
 });
 
