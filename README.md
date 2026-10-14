@@ -114,11 +114,11 @@ Packages are declared in `settings.json` and pinned to immutable git commits or 
 |---------|---------|
 | [pi-wakatime](https://github.com/ttttmr/pi-wakatime) | WakaTime activity tracking |
 | [pi-fff](https://github.com/ShpetimA/pi-fff) | Fast file and content search tools |
-| [pi-openai-server-compaction](https://github.com/ronind/pi-openai-server-compaction/tree/bugfix/pi-extension-loader) | OpenAI server-side compaction; our fork includes [usage reporting](https://github.com/algal/pi-openai-server-compaction/pull/15), [context preservation](https://github.com/algal/pi-openai-server-compaction/pull/18), and Pi 1.0.2 loader compatibility |
+| [pi-openai-server-compaction](https://github.com/ronind/pi-openai-server-compaction/tree/chore/refresh-pi-1.2) | OpenAI server-side compaction; our fork includes [usage reporting](https://github.com/algal/pi-openai-server-compaction/pull/15), [context preservation](https://github.com/algal/pi-openai-server-compaction/pull/18), and Pi 1.2.0 request observation |
 | [pi-auto-session-titles](https://github.com/edxeth/pi-auto-session-titles) | Automatic session titles |
 | [pi-datetime](https://github.com/yusukeshib/pi-datetime) | Date and time context |
 | [pi-sidequest](https://github.com/peterp/pi-sidequest) | Side-task execution |
-| [pi-subagents](https://github.com/ronind/pi-subagents) | Parallel subagent orchestration; our fork ports [upstream #353](https://github.com/tintinweb/pi-subagents/pull/353) to suppress stale completion notifications and uses host-provided TypeBox modules on Pi 1.0.2 |
+| [pi-subagents](https://github.com/ronind/pi-subagents/tree/chore/refresh-pi-1.2) | Parallel subagent orchestration; our fork follows upstream 0.22.0 and retains stale-completion suppression, usage accounting, and host-provided TypeBox fixes, tested on Pi 1.2.0 |
 | [pi-voice](https://github.com/earendil-works/pi-voice) | Local speech-to-text dictation and file transcription |
 | [pi-context-view](https://github.com/dimk90/pi-context-view) | Context usage visualization and inspection of system prompt, tools, and extension injections |
 | [pi-copy-code](https://github.com/penumbral-labs/pi-copy-code) | Copy code blocks and blockquotes from recent assistant messages |
