@@ -99,6 +99,7 @@ export interface EditorBorderInput extends StyledLayout {
   branch?: string | null;
   inGit: boolean;
   inTmux: boolean;
+  inRex?: boolean;
   model?: string;
   thinking?: string;
 }
@@ -216,7 +217,17 @@ export function normalizeKnownStatuses(known: ReadonlyMap<string, string>): Know
   };
 }
 
-export function projectName(gitTopLevel: string | undefined, cwd: string): string {
+export function projectName(gitTopLevel: string | undefined, cwd: string, origin?: string): string {
+  let remotePath = origin?.trim();
+  if (remotePath?.includes("://")) {
+    try {
+      remotePath = new URL(remotePath).pathname;
+    } catch {
+      remotePath = undefined;
+    }
+  }
+  const remoteName = remotePath?.replace(/[\\/]+$/, "").split(/[\\/:]/).at(-1)?.replace(/\.git$/, "");
+  if (remoteName) return remoteName;
   const path = gitTopLevel?.trim() || cwd;
   const parts = path.replace(/[\\/]+$/, "").split(/[\\/]/);
   return parts.at(-1) || path;
@@ -227,10 +238,11 @@ export function projectLabel(options: {
   branch?: string | null;
   inGit: boolean;
   inTmux: boolean;
+  inRex?: boolean;
 }): string | undefined {
-  const { project, branch, inGit, inTmux } = options;
+  const { project, branch, inGit, inTmux, inRex } = options;
   const ref = !branch || branch === "detached" ? "HEAD" : branch;
-  if (inTmux) return inGit ? ref : undefined;
+  if (inTmux || inRex) return inGit ? ref : undefined;
   if (inGit) return project ? `${project}:${ref}` : ref;
   return project;
 }

@@ -113,6 +113,35 @@ test("builds Git and non-Git labels inside and outside tmux", () => {
   assert.equal(projectLabel({ project: "pi-config", branch: "detached", inGit: true, inTmux: false }), "pi-config:HEAD");
 });
 
+test("prefers the origin repository name over local folder names", () => {
+  for (const origin of [
+    "https://example.com/team/repository.git",
+    "https://example.com/team/repository",
+    "git@example.com:team/repository.git",
+    "ssh://git@example.com:2222/team/repository.git",
+    "git://example.com/team/repository.git",
+    "/srv/git/repository.git",
+    "../repository.git/",
+    " https://example.com/team/repository.git\n",
+    "https://example.com/team/repository.git?token=secret#ref",
+  ]) {
+    assert.equal(projectName("/work/local-clone", "/work/local-clone/subdir", origin), "repository", origin);
+  }
+  for (const origin of [undefined, "", " \n", "https://example.com/"]) {
+    assert.equal(projectName("/work/local-clone\n", "/work/subdir", origin), "local-clone");
+    assert.equal(projectName(undefined, "/work/subdir", origin), "subdir");
+  }
+});
+
+test("hides the project inside Rex but preserves the Git branch", () => {
+  assert.equal(projectLabel({ project: "repository", branch: "main", inGit: true, inTmux: false, inRex: true }), "main");
+  assert.equal(projectLabel({ project: "repository", branch: "detached", inGit: true, inTmux: false, inRex: true }), "HEAD");
+  assert.equal(projectLabel({ project: "folder", branch: null, inGit: false, inTmux: false, inRex: true }), undefined);
+  const border = renderEditorTopBorder(editorInput({ inRex: true }), 80, tools, (text) => text);
+  assert.match(border, /^─ main ─+/);
+  assert.ok(!border.includes("pi-config"));
+});
+
 test("classifies fixed status slots independently of Map order", () => {
   const classified = classifyStatuses(new Map([
     ["z-extra", "extra"],

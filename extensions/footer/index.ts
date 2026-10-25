@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import { CustomEditor, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
@@ -28,6 +27,7 @@ export default function footer(pi: ExtensionAPI) {
     project: string;
     inGit: boolean;
     inTmux: boolean;
+    inRex: boolean;
     getBranch: () => string | null;
   } | undefined;
 
@@ -43,13 +43,20 @@ export default function footer(pi: ExtensionAPI) {
     if (ctx.mode !== "tui") return;
 
     const gitRoot = await pi.exec("git", ["rev-parse", "--show-toplevel"], {
+      cwd: ctx.cwd,
       timeout: 2_000,
     });
     if (currentGeneration !== generation) return;
 
     const inGit = gitRoot.code === 0 && Boolean(gitRoot.stdout.trim());
-    const project = inGit ? projectName(gitRoot.stdout, ctx.cwd) : basename(ctx.cwd);
+    const origin = inGit
+      ? await pi.exec("git", ["remote", "get-url", "origin"], { cwd: ctx.cwd, timeout: 2_000 })
+      : undefined;
+    if (currentGeneration !== generation) return;
+
+    const project = projectName(inGit ? gitRoot.stdout : undefined, ctx.cwd, origin?.code === 0 ? origin.stdout : undefined);
     const inTmux = Boolean(process.env.TMUX);
+    const inRex = Boolean(process.env.REX_SESSION);
     const config = loadConfig();
     let getBranch: () => string | null = () => null;
 
@@ -124,7 +131,7 @@ export default function footer(pi: ExtensionAPI) {
       };
     });
 
-    editorState = { project, inGit, inTmux, getBranch };
+    editorState = { project, inGit, inTmux, inRex, getBranch };
   });
 
   pi.on("resources_discover", (_event, ctx) => {
@@ -148,6 +155,7 @@ export default function footer(pi: ExtensionAPI) {
             branch: state.getBranch(),
             inGit: state.inGit,
             inTmux: state.inTmux,
+            inRex: state.inRex,
             model: ctx.model?.id,
             thinking: ctx.thinkingLevel,
             style: (text) => ctx.ui.theme.fg("dim", text),

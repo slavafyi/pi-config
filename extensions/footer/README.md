@@ -14,7 +14,8 @@ model and thinking level on the right:
 ─ pi-config:main ───────────────────────────────── gpt-5.6-sol:fast/medium ─
 ```
 
-Inside tmux, the project name is omitted but the Git branch remains:
+Inside tmux or Rex (`TMUX` or `REX_SESSION` is set), the project name is
+omitted but the Git branch remains:
 
 ```text
 ─ main ─────────────────────────────────────────── gpt-5.6-sol:fast/medium ─
@@ -27,9 +28,14 @@ on the right:
 5h:96% ↺3h  7d:94% ↺5d13h  MCP:0/2    cache:98.1%  ctx:12%/272k  $1.134
 ```
 
+The project name comes from the `origin` remote's repository name, without a
+trailing `.git`. If origin is absent or has no repository name, it falls back to
+the Git root folder name, then the working directory's folder name.
+
 A non-Git directory shows its folder name in the editor border outside tmux and
-no project identifier inside tmux. A detached checkout uses `project:HEAD` or
-`HEAD`. Branch changes update the editor border without a reload.
+Rex, and no project identifier inside either. A detached checkout uses
+`project:HEAD` or `HEAD`. Branch changes update the editor border without a reload.
+The project name is resolved on session startup; use `/reload` after changing origin.
 
 The footer recognizes these fixed status IDs:
 
